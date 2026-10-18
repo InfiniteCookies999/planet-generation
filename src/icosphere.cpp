@@ -1,4 +1,5 @@
 #include "icosphere.h"
+#include "geometry.h"
 
 #include <cassert>
 #include <raylib.h>
@@ -35,18 +36,14 @@ static const size_t TRIANGLE_INDICES[NUM_TRIANGLES][3] = {
     { 2, 5, 8 }, { 3, 10, 5 }, { 2, 3, 5 }
 };
 
-struct Triangle {
-    size_t a_index;
-    size_t b_index;
-    size_t c_index;
-};
-
 class IcosphereGenerator {
 public:
 
     IcosphereGenerator(int _subdivision_count, float _radius);
 
-    Mesh generate();
+    Geometry generate_geometry();
+
+    Mesh generate_mesh(bool smooth_normals);
 
 private:
     // The 6 shared triangles for each vertex.
@@ -58,6 +55,7 @@ private:
     const float radius;
     int subdivision_count;
     size_t total_triangles;
+    bool already_generated = false;
 
     std::vector<Triangle> triangles;
     std::vector<Triangle> triangles2; // swap for subdivision.
@@ -79,11 +77,6 @@ private:
     Vector3 project_to_sphere(Vector3 point) const;
 
 };
-
-static void put_flat_triangle(Mesh& mesh, int offset, Vector3 a, Vector3 b, Vector3 c);
-
-static void put_triangle(Mesh& mesh, int offset, Vector3 a, Vector3 b, Vector3 c,
-                         Vector3 a_normal, Vector3 b_normal, Vector3 c_normal);
 
 Mesh create_perpendicular_golden_rectangle_mesh() {
 
@@ -151,11 +144,18 @@ Mesh create_icosahedron_mesh() {
     return mesh;
 }
 
-Mesh create_icosphere_mesh(int subdivision_count, float radius) {
+Geometry create_icosphere_geometry(int subdivision_count, float radius) {
     IcosphereGenerator generator(subdivision_count, radius);
-    return generator.generate();
+    return generator.generate_geometry();
 }
 
+Mesh create_icosphere_mesh(int subdivision_count, float radius, bool generate_mesh) {
+    IcosphereGenerator generator(subdivision_count, radius);
+    return generator.generate_mesh(generate_mesh);
+}
+
+// IcosphereGenerator implementation
+// ---------------------------------
 
 IcosphereGenerator::IcosphereGenerator(int _subdivision_count, float _radius)
     : radius(_radius)
@@ -167,9 +167,12 @@ IcosphereGenerator::IcosphereGenerator(int _subdivision_count, float _radius)
     positions.reserve(total_triangles * 3);
 }
 
-Mesh IcosphereGenerator::generate() {
+Geometry IcosphereGenerator::generate_geometry() {
+    assert(!already_generated && "geometry already generated");
+    already_generated = true;
 
     gen_icosahedron_triangles();
+
 
     // Subdivide the icosahedron to make it have a higher resolution.
     while (subdivision_count > 0) {
@@ -183,40 +186,15 @@ Mesh IcosphereGenerator::generate() {
         --subdivision_count;
     }
 
-    // Map the vertices to the triangles so that later we can average
-    // the connecting triangle normals of each vertex to create smooth
-    // shading.
-    map_vertices_to_triangles();
+    return {
+        .positions = std::move(positions),
+        .triangles = std::move(triangles)
+    };
+}
 
-    // Generate the mesh from the sub-divided positions.
-    Mesh mesh = { 0 };
-    mesh.triangleCount = total_triangles;
-    mesh.vertexCount = mesh.triangleCount * 3;
-    // Not using new operator because UnloadMesh may rely on the implementation of MemAlloc.
-    mesh.vertices = static_cast<float*>(MemAlloc(mesh.vertexCount * 3 * sizeof(float)));
-    mesh.normals = static_cast<float*>(MemAlloc(mesh.vertexCount * 3 * sizeof(float)));
-
-    int t = 0;
-    for (const Triangle& tri : triangles) {
-        int o = t * 3 * 3;
-        Vector3 a = positions[tri.a_index];
-        Vector3 b = positions[tri.b_index];
-        Vector3 c = positions[tri.c_index];
-
-        // put_flat_triangle(mesh, o, a, b, c);
-
-        Vector3 a_normal = get_averaged_normal(tri.a_index);
-        Vector3 b_normal = get_averaged_normal(tri.b_index);
-        Vector3 c_normal = get_averaged_normal(tri.c_index);
-
-        put_triangle(mesh, o, a, b, c, a_normal, b_normal, c_normal);
-        ++t;
-    }
-
-    // Send the memory to the GPU.
-    UploadMesh(&mesh, false);
-
-    return mesh;
+Mesh IcosphereGenerator::generate_mesh(bool smooth_normals) {
+    Geometry geom = generate_geometry();
+    return mesh_from_geometry(geom, smooth_normals);
 }
 
 void IcosphereGenerator::gen_icosahedron_triangles() {
@@ -319,38 +297,4 @@ Vector3 IcosphereGenerator::get_averaged_normal(size_t index) {
 Vector3 IcosphereGenerator::project_to_sphere(Vector3 point) const {
     Vector3 norm = Vector3Normalize(point);
     return norm * radius;
-}
-
-static void put_flat_triangle(Mesh& mesh, int offset, Vector3 a, Vector3 b, Vector3 c) {
-
-    Vector3 ba = b - a;
-    Vector3 ca = c - a;
-    Vector3 normal = Vector3CrossProduct(ba, ca);
-
-    put_triangle(mesh, offset, a, b, c, normal, normal, normal);
-
-}
-
-static void put_triangle(Mesh& mesh, int offset, Vector3 a, Vector3 b, Vector3 c,
-                         Vector3 a_normal, Vector3 b_normal, Vector3 c_normal) {
-
-    int o = offset;
-    mesh.vertices[o + 0] = a.x;
-    mesh.vertices[o + 1] = a.y;
-    mesh.vertices[o + 2] = a.z;
-    mesh.vertices[o + 3] = b.x;
-    mesh.vertices[o + 4] = b.y;
-    mesh.vertices[o + 5] = b.z;
-    mesh.vertices[o + 6] = c.x;
-    mesh.vertices[o + 7] = c.y;
-    mesh.vertices[o + 8] = c.z;
-    mesh.normals[o + 0] = a_normal.x;
-    mesh.normals[o + 1] = a_normal.y;
-    mesh.normals[o + 2] = a_normal.z;
-    mesh.normals[o + 3] = b_normal.x;
-    mesh.normals[o + 4] = b_normal.y;
-    mesh.normals[o + 5] = b_normal.z;
-    mesh.normals[o + 6] = c_normal.x;
-    mesh.normals[o + 7] = c_normal.y;
-    mesh.normals[o + 8] = c_normal.z;
 }

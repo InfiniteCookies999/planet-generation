@@ -19,7 +19,9 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(raylib)
 
-add_executable(planet_generation "src/main.cpp" "src/text_3d.cpp" "src/icosphere.cpp")
+add_executable(planet_generation "src/main.cpp" "src/text_3d.cpp" "src/icosphere.cpp"
+                                 "src/geometry.cpp" "src/planet_deform.cpp" "src/perlin_noise.cpp"
+                                 "src/controlled_camera.cpp")
 
 target_link_libraries(planet_generation raylib)
 
