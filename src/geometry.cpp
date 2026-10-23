@@ -1,7 +1,8 @@
 #include "geometry.h"
-#include <iostream>
+
 #include <raylib.h>
 #include <raymath.h>
+#include <unordered_map>
 
 using MappedTriangles = std::unordered_map<size_t, std::vector<const Triangle*>>;
 
@@ -10,9 +11,7 @@ static Vector3 get_averaged_normal(const Geometry& geom,
                                    std::unordered_map<size_t, Vector3>& cached_normals,
                                    size_t index);
 
-Mesh mesh_from_geometry(const Geometry& geom, bool smooth_normals) {
-
-    std::cout << "number of triangles: " << geom.triangles.size() << "\n";
+Mesh mesh_from_geometry(const Geometry& geom, bool smooth_normals, bool upload_to_gpu) {
 
     // Generate the mesh from the sub-divided positions.
     Mesh mesh = { 0 };
@@ -54,7 +53,9 @@ Mesh mesh_from_geometry(const Geometry& geom, bool smooth_normals) {
     }
 
     // Send the memory to the GPU.
-    UploadMesh(&mesh, false);
+    if (upload_to_gpu) {
+        UploadMesh(&mesh, false);
+    }
 
     return mesh;
 }

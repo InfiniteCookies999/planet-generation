@@ -2,6 +2,9 @@
 #include "geometry.h"
 
 #include <cassert>
+#include <cmath>
+#include <iostream>
+#include <limits>
 #include <raylib.h>
 #include <raymath.h>
 #include <unordered_map>
@@ -70,6 +73,10 @@ private:
 
     void map_vertices_to_triangles();
 
+    void gen_texture_coordinates(const Geometry& geom, Mesh& mesh);
+
+    static void put_uv_from_coordinates(Mesh& mesh, int offset, float longitude, float latitude);
+
     size_t create_and_get_mid_point_index(size_t index0, size_t index1);
 
     Vector3 get_averaged_normal(size_t index);
@@ -80,7 +87,7 @@ private:
 
 Mesh create_perpendicular_golden_rectangle_mesh() {
 
-    const int NUM_TRIANGLES = 6;
+    constexpr int NUM_TRIANGLES = 6;
 
     Mesh mesh = { 0 };
     mesh.triangleCount = NUM_TRIANGLES;
@@ -194,7 +201,16 @@ Geometry IcosphereGenerator::generate_geometry() {
 
 Mesh IcosphereGenerator::generate_mesh(bool smooth_normals) {
     Geometry geom = generate_geometry();
-    return mesh_from_geometry(geom, smooth_normals);
+    Mesh mesh = mesh_from_geometry(geom, smooth_normals, false);
+
+    // mesh_from_geometry does not give us the texture coordinates so
+    // we are going ahead and calculating those now.
+    gen_texture_coordinates(geom, mesh);
+
+    // Send the memory to the GPU.
+    UploadMesh(&mesh, false);
+
+    return mesh;
 }
 
 void IcosphereGenerator::gen_icosahedron_triangles() {
@@ -243,6 +259,91 @@ void IcosphereGenerator::map_vertices_to_triangles() {
         MappedTriangles& c_mapped = mapped_triangles_lookup[tri.c_index];
         c_mapped.triangles[c_mapped.tri_count++] = tri;
     }
+}
+
+void IcosphereGenerator::gen_texture_coordinates(const Geometry& geom, Mesh& mesh) {
+
+    // Not using new operator because UnloadMesh may rely on the implementation of MemAlloc.
+    mesh.texcoords = static_cast<float*>(MemAlloc(mesh.vertexCount * 2 * sizeof(float)));
+
+    auto get_longitude = [](const Vector3& point) {
+        float longitude = atan2(point.z, point.x);
+        if (longitude < 0) longitude += 2*PI; // 0 to 2 PI
+        return longitude;
+    };
+
+    auto get_latitude = [](const Vector3& point) {
+
+        // "naive" projection:
+        return asin(point.y / Vector3Length(point)) + (0.5f*PI); // 0 to PI
+
+        // Cylindrical projection:
+        // https://en.wikipedia.org/wiki/Miller_cylindrical_projection
+        // results seem to be essentially the same not sure we get much more out of
+        // this compared to just using the naive approach.
+
+        // float latitude = asin(point.y / Vector3Length(point));
+        // float r = (5.f/4) * logf(tan(0.25f*PI + (2.f/5)*latitude));
+        // r += 2.303413f; // 0 to 4.606826
+        // r *= PI/4.606826f; // 0 to PI
+        // return r;
+    };
+
+    int t = 0;
+    for (const Triangle& tri : geom.triangles) {
+
+        int o = t * 3 * 2;
+        Vector3 a = geom.positions[tri.a_index];
+        Vector3 b = geom.positions[tri.b_index];
+        Vector3 c = geom.positions[tri.c_index];
+
+
+        float a_longitude = get_longitude(a);
+        float b_longitude = get_longitude(b);
+        float c_longitude = get_longitude(c);
+
+        float a_latitude = get_latitude(a);
+        float b_latitude = get_latitude(b);
+        float c_latitude = get_latitude(c);
+
+        // Along the meridian at longitude 0 there are triangles
+        // that are on either sides of it meaning the computed
+        // longitude of points range from near zero to near 2 PI.
+        //
+        // For these triangles the coordinates need to actually
+        // wrap by going from 2 PI to slightly over 2 PI so that
+        // texture repeating may continuously repeat the texture
+        // beyond the end of the texture.
+        constexpr float PI15 = 1.5f * PI;
+        if (abs(a_longitude - b_longitude) > PI15 ||
+            abs(a_longitude - c_longitude) > PI15 ||
+            abs(b_longitude - c_longitude) > PI15) {
+            // We do not nes. want to say near equal zero because the points that cross
+            // the boundrary may not nes. be that close to zero.
+            if (a_longitude < PI/4.0f) {
+                a_longitude += 2*PI;
+            }
+            if (b_longitude < PI/4.0f) {
+                b_longitude += 2*PI;
+            }
+            if (c_longitude < PI/4.0f) {
+                c_longitude += 2*PI;
+            }
+        }
+
+        put_uv_from_coordinates(mesh, o  , a_longitude, a_latitude);
+        put_uv_from_coordinates(mesh, o+2, b_longitude, b_latitude);
+        put_uv_from_coordinates(mesh, o+4, c_longitude, c_latitude);
+
+        ++t;
+    }
+}
+
+void IcosphereGenerator::put_uv_from_coordinates(Mesh& mesh, int offset, float longitude, float latitude) {
+    float u = 1.0f - (longitude / (2*PI));
+    float v = 1.0f -  (latitude / PI); // (latitude / 4.606826f);
+    mesh.texcoords[offset + 0] = u;
+    mesh.texcoords[offset + 1] = v;
 }
 
 size_t IcosphereGenerator::create_and_get_mid_point_index(size_t index0, size_t index1) {

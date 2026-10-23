@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <raylib.h>
-#include <unordered_map>
+#include <stdbool.h>
 #include <vector>
 
 struct Triangle {
@@ -16,7 +16,7 @@ struct Geometry {
     std::vector<Triangle> triangles;
 };
 
-Mesh mesh_from_geometry(const Geometry& geom, bool smooth_lighting);
+Mesh mesh_from_geometry(const Geometry& geom, bool smooth_lighting, bool upload_to_gpu = true);
 
 void put_flat_triangle(Mesh& mesh, int offset, Vector3 a, Vector3 b, Vector3 c);
 

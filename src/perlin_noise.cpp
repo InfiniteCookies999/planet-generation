@@ -16,17 +16,27 @@ PerlinNoise::PerlinNoise(std::mt19937& gen) {
     }
 }
 
+std::vector<int> PerlinNoise::get_random_gradiant_hashes(std::mt19937& gen) {
+    std::vector<int> hashes(GRID_SIZE);
+    std::uniform_int_distribution<> dist(0, 3);
+    // Randomize the hashes table.
+    for (int i = 0; i < GRID_SIZE; i++) {
+        hashes[i] = dist(gen);
+    }
+    return hashes;
+}
+
 double PerlinNoise::sample(double x, double y) {
 
     // Find the cell that the point x,y lies in.
-    int cellX = static_cast<int>(floor(x)) & GRID_CELL_MASK;
-    int cellY = static_cast<int>(floor(y)) & GRID_CELL_MASK;
+    int cell_x = static_cast<int>(floor(x)) & GRID_CELL_MASK;
+    int cell_y = static_cast<int>(floor(y)) & GRID_CELL_MASK;
 
     // Sample the grid of gradient hashes.
-    int gbl = hashes[cellY*GRID_VECTOR_WIDTH_COUNT + cellX];
-    int gbr = hashes[cellY*GRID_VECTOR_WIDTH_COUNT + (cellX+1)];
-    int gtl = hashes[(cellY+1)*GRID_VECTOR_WIDTH_COUNT + cellX];
-    int gtr = hashes[(cellY+1)*GRID_VECTOR_WIDTH_COUNT + (cellX+1)];
+    int gbl = hashes[cell_y*GRID_VECTOR_WIDTH_COUNT + cell_x];
+    int gbr = hashes[cell_y*GRID_VECTOR_WIDTH_COUNT + (cell_x+1)];
+    int gtl = hashes[(cell_y+1)*GRID_VECTOR_WIDTH_COUNT + cell_x];
+    int gtr = hashes[(cell_y+1)*GRID_VECTOR_WIDTH_COUNT + (cell_x+1)];
 
     // Distance of x/y in cell.
     double dx = x - floor(x);
