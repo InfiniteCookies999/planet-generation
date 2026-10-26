@@ -1,10 +1,11 @@
 #pragma once
 
 #include <random>
-class PerlinNoise {
+
+class PerlinNoise2D {
 public:
 
-    PerlinNoise(std::mt19937& gen);
+    PerlinNoise2D(std::mt19937& _gen);
 
     double sample(double x, double y);
 
@@ -18,6 +19,25 @@ private:
     static const int GRID_SIZE = GRID_VECTOR_WIDTH_COUNT * GRID_VECTOR_WIDTH_COUNT;
 
     // Gradiant hashes table.
-    int hashes[GRID_SIZE];
+    int m_hashes[GRID_SIZE];
+
+    static double grad(int hash, double x, double y);
+
+};
+
+class PerlinNoise3D {
+public:
+
+    PerlinNoise3D(std::mt19937& gen);
+
+    double sample(double x, double y, double z);
+
+private:
+
+    int m_permutations[512];
+
+    // Uses the lower 16 bits of `hash` to randomly choose from 12 gradient
+    // vectors with 4 duplicates.
+    static double grad(int hash, double x, double y, double z);
 
 };

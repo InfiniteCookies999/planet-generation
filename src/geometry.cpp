@@ -21,7 +21,6 @@ Mesh mesh_from_geometry(const Geometry& geom, bool smooth_normals, bool upload_t
     mesh.vertices = static_cast<float*>(MemAlloc(mesh.vertexCount * 3 * sizeof(float)));
     mesh.normals = static_cast<float*>(MemAlloc(mesh.vertexCount * 3 * sizeof(float)));
 
-
     MappedTriangles mapped_triangles;
     std::unordered_map<size_t, Vector3> cached_normals;
     if (smooth_normals) {

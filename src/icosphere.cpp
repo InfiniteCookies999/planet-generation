@@ -3,8 +3,6 @@
 
 #include <cassert>
 #include <cmath>
-#include <iostream>
-#include <limits>
 #include <raylib.h>
 #include <raymath.h>
 #include <unordered_map>
@@ -42,44 +40,34 @@ static const size_t TRIANGLE_INDICES[NUM_TRIANGLES][3] = {
 class IcosphereGenerator {
 public:
 
-    IcosphereGenerator(int _subdivision_count, float _radius);
+    IcosphereGenerator(int subdivision_count, float radius);
 
     Geometry generate_geometry();
 
     Mesh generate_mesh(bool smooth_normals);
 
 private:
-    // The 6 shared triangles for each vertex.
-    struct MappedTriangles {
-        Triangle triangles[6];
-        int tri_count = 0;
-    };
 
-    const float radius;
-    int subdivision_count;
-    size_t total_triangles;
-    bool already_generated = false;
+    const float m_radius;
+    const size_t m_total_triangles;
+    int m_subdivision_count;
+    bool m_already_generated = false;
 
-    std::vector<Triangle> triangles;
-    std::vector<Triangle> triangles2; // swap for subdivision.
-    std::vector<Vector3> positions;
-    std::unordered_map<int64_t, size_t> cached_positions;
-    std::unordered_map<size_t, MappedTriangles> mapped_triangles_lookup;
-    std::unordered_map<size_t, Vector3> cached_normals;
+    std::vector<Triangle> m_triangles;
+    std::vector<Triangle> m_triangles2; // swap for subdivision.
+    std::vector<Vector3> m_positions;
+    std::unordered_map<int64_t, size_t> m_cached_positions;
+    std::unordered_map<size_t, Vector3> m_cached_normals;
 
     void gen_icosahedron_triangles();
 
     void subdivide(const Triangle& tri, std::vector<Triangle>& triangles);
-
-    void map_vertices_to_triangles();
 
     void gen_texture_coordinates(const Geometry& geom, Mesh& mesh);
 
     static void put_uv_from_coordinates(Mesh& mesh, int offset, float longitude, float latitude);
 
     size_t create_and_get_mid_point_index(size_t index0, size_t index1);
-
-    Vector3 get_averaged_normal(size_t index);
 
     Vector3 project_to_sphere(Vector3 point) const;
 
@@ -164,38 +152,37 @@ Mesh create_icosphere_mesh(int subdivision_count, float radius, bool generate_me
 // IcosphereGenerator implementation
 // ---------------------------------
 
-IcosphereGenerator::IcosphereGenerator(int _subdivision_count, float _radius)
-    : radius(_radius)
-    , subdivision_count(_subdivision_count)
-    , total_triangles(static_cast<size_t>(20 * (1 << (2 * subdivision_count))))
-    {
-    triangles.reserve(total_triangles);
-    triangles2.reserve(total_triangles);
-    positions.reserve(total_triangles * 3);
+IcosphereGenerator::IcosphereGenerator(int subdivision_count, float radius)
+    : m_radius(radius)
+    , m_total_triangles(static_cast<size_t>(20 * (1 << (2 * subdivision_count))))
+    , m_subdivision_count(subdivision_count)
+{
+    m_triangles.reserve(m_total_triangles);
+    m_triangles2.reserve(m_total_triangles);
+    m_positions.reserve(m_total_triangles * 3);
 }
 
 Geometry IcosphereGenerator::generate_geometry() {
-    assert(!already_generated && "geometry already generated");
-    already_generated = true;
+    assert(!m_already_generated && "geometry already generated");
+    m_already_generated = true;
 
     gen_icosahedron_triangles();
 
-
     // Subdivide the icosahedron to make it have a higher resolution.
-    while (subdivision_count > 0) {
+    while (m_subdivision_count > 0) {
 
-        triangles2.clear();
-        for (Triangle& tri : triangles) {
-            subdivide(tri, triangles2);
+        m_triangles2.clear();
+        for (Triangle& tri : m_triangles) {
+            subdivide(tri, m_triangles2);
         }
-        triangles = triangles2;
+        m_triangles = m_triangles2;
 
-        --subdivision_count;
+        --m_subdivision_count;
     }
 
     return {
-        .positions = std::move(positions),
-        .triangles = std::move(triangles)
+        .positions = std::move(m_positions),
+        .triangles = std::move(m_triangles)
     };
 }
 
@@ -216,19 +203,19 @@ Mesh IcosphereGenerator::generate_mesh(bool smooth_normals) {
 void IcosphereGenerator::gen_icosahedron_triangles() {
     for (int i = 0; i < 12; i++) {
         Vector3 position = VERTEX_POINTS[i];
-        size_t index = positions.size();
+        size_t index = m_positions.size();
 
         position = project_to_sphere(position);
-        positions.push_back(position);
+        m_positions.push_back(position);
 
-        cached_positions.insert({ i, index });
+        m_cached_positions.insert({ i, index });
     }
 
     for (int t = 0; t < NUM_TRIANGLES; t++) {
         size_t a_index = TRIANGLE_INDICES[t][0];
         size_t b_index = TRIANGLE_INDICES[t][1];
         size_t c_index = TRIANGLE_INDICES[t][2];
-        triangles.push_back({ a_index, b_index, c_index });
+        m_triangles.push_back({ a_index, b_index, c_index });
     }
 }
 
@@ -248,19 +235,6 @@ void IcosphereGenerator::subdivide(const Triangle& tri, std::vector<Triangle>& t
     triangles.push_back(t3);
 }
 
-void IcosphereGenerator::map_vertices_to_triangles() {
-    for (const Triangle& tri : triangles) {
-        MappedTriangles& a_mapped = mapped_triangles_lookup[tri.a_index];
-        a_mapped.triangles[a_mapped.tri_count++] = tri;
-
-        MappedTriangles& b_mapped = mapped_triangles_lookup[tri.b_index];
-        b_mapped.triangles[b_mapped.tri_count++] = tri;
-
-        MappedTriangles& c_mapped = mapped_triangles_lookup[tri.c_index];
-        c_mapped.triangles[c_mapped.tri_count++] = tri;
-    }
-}
-
 void IcosphereGenerator::gen_texture_coordinates(const Geometry& geom, Mesh& mesh) {
 
     // Not using new operator because UnloadMesh may rely on the implementation of MemAlloc.
@@ -272,10 +246,10 @@ void IcosphereGenerator::gen_texture_coordinates(const Geometry& geom, Mesh& mes
         return longitude;
     };
 
-    auto get_latitude = [](const Vector3& point) {
+    auto get_latitude = [this](const Vector3& point) {
 
         // "naive" projection:
-        return asin(point.y / Vector3Length(point)) + (0.5f*PI); // 0 to PI
+        return asin(point.y / m_radius) + (0.5f*PI); // 0 to PI
 
         // Cylindrical projection:
         // https://en.wikipedia.org/wiki/Miller_cylindrical_projection
@@ -353,49 +327,24 @@ size_t IcosphereGenerator::create_and_get_mid_point_index(size_t index0, size_t 
     }
 
     int64_t cache_index = (static_cast<int64_t>(index0) << 32ll) | static_cast<int64_t>(index1);
-    auto it = cached_positions.find(cache_index);
-    if (it != cached_positions.end()) {
+    auto it = m_cached_positions.find(cache_index);
+    if (it != m_cached_positions.end()) {
         return it->second;
     }
 
-    Vector3 pos0 = positions[index0];
-    Vector3 pos1 = positions[index1];
+    Vector3 pos0 = m_positions[index0];
+    Vector3 pos1 = m_positions[index1];
     Vector3 mid_point = (pos0 + pos1) / 2.f;
     mid_point = project_to_sphere(mid_point);
 
-    int new_position_index = positions.size();
-    positions.push_back(mid_point);
-    cached_positions.insert({ cache_index, new_position_index });
+    int new_position_index = m_positions.size();
+    m_positions.push_back(mid_point);
+    m_cached_positions.insert({ cache_index, new_position_index });
 
     return new_position_index;
 }
 
-Vector3 IcosphereGenerator::get_averaged_normal(size_t index) {
-    auto it = cached_normals.find(index);
-    if (it != cached_normals.end()) {
-        return it->second;
-    }
-
-    Vector3 summed_normal = { 0 };
-    const MappedTriangles& mapped_triangles = mapped_triangles_lookup[index];
-    for (int i = 0; i < 6; i++) {
-        Triangle tri = mapped_triangles.triangles[i];
-        Vector3 a = positions[tri.a_index];
-        Vector3 b = positions[tri.b_index];
-        Vector3 c = positions[tri.c_index];
-
-        Vector3 ba = b - a;
-        Vector3 ca = c - a;
-        Vector3 normal = Vector3CrossProduct(ba, ca);
-        summed_normal += normal;
-    }
-
-    Vector3 avg_normal = summed_normal / 6.f;
-    cached_normals.insert({ index, avg_normal });
-    return avg_normal;
-}
-
 Vector3 IcosphereGenerator::project_to_sphere(Vector3 point) const {
     Vector3 norm = Vector3Normalize(point);
-    return norm * radius;
+    return norm * m_radius;
 }
