@@ -1,0 +1,12 @@
+https://en.wikipedia.org/wiki/Stellar_classification
+
+              Temperature   radius
+Blue stars:   25K           1.8  - 6.6  R
+White stars:  10K           1.15 – 1.8  R
+Yellow stars: 6K            0.96 – 1.15 R
+Orange stars: 4K            0.7  – 0.96 R
+Red stars:    3K            <= 0.7      R
+
+
+* The lower the Temperature often means its older as well, essentially dying out.
+* The lower the Temperate also the small the size.

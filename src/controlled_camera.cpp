@@ -12,7 +12,7 @@ ControlledCamera::ControlledCamera(Vector3 position, Vector3 target,
         .position = position,
         .target = target,
         .up = { 0, 1, 0 },
-        .fovy = 45.f,
+        .fovy = 45.0f,
         .projection = CAMERA_PERSPECTIVE
     })
     , m_min_zoom(min_zoom)

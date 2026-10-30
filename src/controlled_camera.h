@@ -15,6 +15,14 @@ public:
         return m_camera;
     }
 
+    float get_yaw() const {
+        return m_yaw;
+    }
+
+    float get_pitch() const {
+        return m_pitch;
+    }
+
 private:
     Camera m_camera;
     const float m_min_zoom;

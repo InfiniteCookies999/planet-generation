@@ -257,7 +257,7 @@ void IcosphereGenerator::gen_texture_coordinates(const Geometry& geom, Mesh& mes
         // this compared to just using the naive approach.
 
         // float latitude = asin(point.y / Vector3Length(point));
-        // float r = (5.f/4) * logf(tan(0.25f*PI + (2.f/5)*latitude));
+        // float r = (5.0f/4) * logf(tan(0.25f*PI + (2.0f/5)*latitude));
         // r += 2.303413f; // 0 to 4.606826
         // r *= PI/4.606826f; // 0 to PI
         // return r;
@@ -334,7 +334,7 @@ size_t IcosphereGenerator::create_and_get_mid_point_index(size_t index0, size_t 
 
     Vector3 pos0 = m_positions[index0];
     Vector3 pos1 = m_positions[index1];
-    Vector3 mid_point = (pos0 + pos1) / 2.f;
+    Vector3 mid_point = (pos0 + pos1) / 2.0f;
     mid_point = project_to_sphere(mid_point);
 
     int new_position_index = m_positions.size();
