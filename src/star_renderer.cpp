@@ -1,7 +1,9 @@
 #include "star_renderer.h"
 
+#include <algorithm>
 #include <assert.h>
 #include <cmath>
+#include <future>
 #include <random>
 #include <raylib.h>
 #include <rlgl.h>
@@ -10,6 +12,7 @@
 #include "perlin_noise.h"
 #include "raymath.h"
 #include "uvsphere.h"
+
 
 StarRenderer::StarRenderer(Shader star_shader, Shader star_ray_shader)
     : m_shader(star_shader)
@@ -65,6 +68,8 @@ void StarRenderer::initialize(std::mt19937& gen) {
     m_ray_color_far_uniform_loc   = GetShaderLocation(m_ray_shader, "u_ray_color_far");
     m_ray_tick_uniform_loc        = GetShaderLocation(m_ray_shader, "u_tick");
     m_star_center_uniform_loc     = GetShaderLocation(m_ray_shader, "u_star_center");
+
+    create_geo_location_cache();
 
     randomize(gen);
 }
@@ -133,10 +138,6 @@ void StarRenderer::randomize(std::mt19937& gen) {
 
     std::uniform_real_distribution<float> freq0_dist(25, 50);
     std::uniform_real_distribution<float> freq1_dist(55, 80);
-
-    // TODO (maddie): calculating these is rather slow. It is 200K iterations.
-    // The sampling calculations are all mutually exclusive so multi-threading
-    // could be used.
 
     generate_perlin_pixels(gen, freq0_dist(gen));
     UpdateTexture(m_texture0, &m_pixels[0]);
@@ -243,9 +244,8 @@ Texture StarRenderer::generate_empty_texture() {
     return LoadTextureFromImage(img);
 }
 
-void StarRenderer::generate_perlin_pixels(std::mt19937& gen, float freq) {
-
-    PerlinNoise3D noise(gen);
+void StarRenderer::create_geo_location_cache() {
+    m_geo_location_cache.resize(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION);
 
     for (int ty = 0; ty < TEXTURE_RESOLUTION; ty++) {
 
@@ -264,10 +264,55 @@ void StarRenderer::generate_perlin_pixels(std::mt19937& gen, float freq) {
             x = (x + 1) * 0.5f;
             z = (z + 1) * 0.5f;
 
-            float density = noise.sample(x * freq, y * freq, z * freq);
-            density = (density + 1.0f) * 0.5f;
-
-            m_pixels[ty*TEXTURE_RESOLUTION + tx] = density;
+            int index = ty*TEXTURE_RESOLUTION + tx;
+            m_geo_location_cache[index] = Vector3{ x, y, z };
         }
+    }
+
+}
+
+void StarRenderer::generate_perlin_pixels(std::mt19937& gen, float freq) {
+
+    PerlinNoise3D noise(gen);
+
+    const int total = TEXTURE_RESOLUTION * TEXTURE_RESOLUTION;
+
+    unsigned num_threads = std::thread::hardware_concurrency();
+    unsigned used_threads = num_threads / 2;
+    if (used_threads == 0) { // hardware_concurrency() is a hint and may return 0.
+        used_threads = 1;
+    }
+
+    // TODO (maddie): is used_threads is 1 maybe we should skip using the future entirely.
+    int chunk_size = static_cast<int>(std::ceilf(total / static_cast<float>(used_threads)));
+
+    std::vector<std::future<void>> futures;
+    for (unsigned t = 0; t < used_threads; ++t) {
+        int start = t * chunk_size;
+        int end = std::min(start + chunk_size, total);
+
+        if (start >= total) {
+            break;
+        }
+
+        futures.push_back(std::async(std::launch::async, [&, start, end]() {
+            for (int i = start; i < end; i++) {
+                const Vector3& geo_location = m_geo_location_cache[i];
+
+                float density = noise.sample(
+                    geo_location.x * freq,
+                    geo_location.y * freq,
+                    geo_location.z * freq
+                );
+
+                density = (density + 1.0f) * 0.5f;
+
+                m_pixels[i] = density;
+            }
+        }));
+    }
+
+    for (auto& future : futures) {
+        future.get();
     }
 }

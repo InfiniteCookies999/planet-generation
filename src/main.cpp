@@ -1,9 +1,12 @@
 
 #include "controlled_camera.h"
+#include "perlin_noise.h"
+#include "simplex_noise.h"
 #include "skybox.h"
 #include "star_renderer.h"
 #include "text_3d.h"
 
+#include <algorithm>
 #include <cstring>
 #include <iostream>
 #include <random>
@@ -15,7 +18,6 @@
 
 static long long current_time_nanoseconds();
 static double current_time_milliseconds();
-
 
 int main() {
 
@@ -48,7 +50,7 @@ int main() {
 
     const char* characters = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHI\nJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklm\nnopqrstuvwxyz{|}~";
     std::vector<int> codepoints;
-    for (int i = 0; i < TextLength(characters); i++) {
+    for (unsigned i = 0; i < TextLength(characters); i++) {
         codepoints.push_back(static_cast<int>(characters[i]));
     }
     Font font_x64 = LoadFontEx("assets/fonts/DejaVuSansMono.ttf", 64, &codepoints[0], 95);

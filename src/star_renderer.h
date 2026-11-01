@@ -27,7 +27,7 @@ public:
     ~StarRenderer();
 
 private:
-    static const size_t TEXTURE_RESOLUTION = 1024;
+    static const int TEXTURE_RESOLUTION = 1024;
 
     const Shader m_shader;
     const Shader m_ray_shader;
@@ -39,6 +39,8 @@ private:
     std::vector<float> m_pixels;
     Texture m_texture0;
     Texture m_texture1;
+
+    std::vector<Vector3> m_geo_location_cache;
 
     unsigned m_rays_seed;
     int m_ray_color_near;
@@ -70,6 +72,8 @@ private:
     static void set_shader_color(Shader shader, int uniform_loc, int hex_color);
 
     Texture generate_empty_texture();
+
+    void create_geo_location_cache();
 
     void generate_perlin_pixels(std::mt19937& gen, float freq);
 

@@ -32,7 +32,7 @@ private:
     float m_pitch;
     float m_distance_to_target;
 
-    Vector2 m_start_pan_mouse_position = { 0 };
+    Vector2 m_start_pan_mouse_position{};
 
     void compute_position_from_yaw_and_pitch();
 

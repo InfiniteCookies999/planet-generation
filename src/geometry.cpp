@@ -14,7 +14,7 @@ static Vector3 get_averaged_normal(const Geometry& geom,
 Mesh mesh_from_geometry(const Geometry& geom, bool smooth_normals, bool upload_to_gpu) {
 
     // Generate the mesh from the sub-divided positions.
-    Mesh mesh = { 0 };
+    Mesh mesh{};
     mesh.triangleCount = geom.triangles.size();
     mesh.vertexCount = mesh.triangleCount * 3;
     // Not using new operator because UnloadMesh may rely on the implementation of MemAlloc.
@@ -69,7 +69,7 @@ static Vector3 get_averaged_normal(const Geometry& geom,
     }
 
     const std::vector<const Triangle*>& triangles = mapped_triangles.find(index)->second;
-    Vector3 summed_normal = { 0 };
+    Vector3 summed_normal{};
     for (const Triangle* tri : triangles) {
         Vector3 a = geom.positions[tri->a_index];
         Vector3 b = geom.positions[tri->b_index];

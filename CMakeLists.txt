@@ -21,9 +21,23 @@ FetchContent_MakeAvailable(raylib)
 
 add_executable(planet_generation "src/main.cpp" "src/text_3d.cpp" "src/icosphere.cpp" "src/uvsphere.cpp"
                                  "src/geometry.cpp" "src/planet_deform.cpp" "src/perlin_noise.cpp"
-                                 "src/controlled_camera.cpp" "src/star_renderer.cpp" "src/skybox.cpp")
+                                 "src/controlled_camera.cpp" "src/star_renderer.cpp" "src/skybox.cpp"
+                                 "src/simplex_noise.cpp")
 
-target_link_libraries(planet_generation raylib)
+target_link_libraries(planet_generation PRIVATE raylib)
+
+# Make sure raylib is not giving warnings.
+target_include_directories(planet_generation SYSTEM PRIVATE
+    ${raylib_SOURCE_DIR}/src
+)
+
+if (MSVC)
+    # warning level 4
+    target_compile_options(planet_generation PRIVATE /W4)
+else()
+    # additional warnings
+    target_compile_options(planet_generation PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 # Checks if OSX and links appropriate frameworks (only required on MacOS)
 if (APPLE)
