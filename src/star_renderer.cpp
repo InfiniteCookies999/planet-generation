@@ -8,31 +8,18 @@
 #include <raylib.h>
 #include <rlgl.h>
 
+#include "billboard_render.h"
 #include "controlled_camera.h"
 #include "perlin_noise.h"
 #include "raymath.h"
 #include "uvsphere.h"
 
 
-StarRenderer::StarRenderer(Shader star_shader, Shader star_ray_shader)
+StarRenderer::StarRenderer(Shader star_shader, Shader star_rays_shader)
     : m_shader(star_shader)
-    , m_ray_shader(star_ray_shader)
-    , m_initialized(false)
+    , m_rays_shader(star_rays_shader)
     , m_pixels(TEXTURE_RESOLUTION * TEXTURE_RESOLUTION)
 {
-}
-
-StarRenderer::~StarRenderer() {
-    if (!m_initialized) {
-        return;
-    }
-    UnloadModel(m_model);
-    UnloadTexture(m_texture0);
-    UnloadTexture(m_texture1);
-}
-
-void StarRenderer::initialize(std::mt19937& gen) {
-    m_initialized = true;
     // TODO (maddie): The UV sphere seems like a clear winner in reducing the vertex count to achieve the
     //                results we want to see. 4K triangles at 32 segment/64 rings vs. 20K triangles in
     //                an icosphere at 5 subdivisions.
@@ -43,7 +30,7 @@ void StarRenderer::initialize(std::mt19937& gen) {
     //
     //                It may be possibly to even further reduce by using smoothed normals.
 
-    m_model = LoadModelFromMesh(create_uvsphere_mesh(32, 64, m_radius, false));
+    m_model = LoadModelFromMesh(create_uvsphere_mesh(32, 64, 1.0f, false));
 
     m_texture0 = generate_empty_texture();
     m_texture1 = generate_empty_texture();
@@ -61,40 +48,27 @@ void StarRenderer::initialize(std::mt19937& gen) {
 
 
     // m_ray_radius_uniform_loc     = GetShaderLocation(m_ray_shader, "u_ray_radius");
-    m_ray_length_uniform_loc      = GetShaderLocation(m_ray_shader, "u_rays_length");
-    m_star_radius_uniform_loc     = GetShaderLocation(m_ray_shader, "u_star_radius");
-    m_ray_seed_uniform_loc        = GetShaderLocation(m_ray_shader, "u_seed");
-    m_ray_color_near_uniform_loc  = GetShaderLocation(m_ray_shader, "u_ray_color_near");
-    m_ray_color_far_uniform_loc   = GetShaderLocation(m_ray_shader, "u_ray_color_far");
-    m_ray_tick_uniform_loc        = GetShaderLocation(m_ray_shader, "u_tick");
-    m_star_center_uniform_loc     = GetShaderLocation(m_ray_shader, "u_star_center");
+    m_ray_length_uniform_loc      = GetShaderLocation(m_rays_shader, "u_rays_length");
+    m_star_radius_uniform_loc     = GetShaderLocation(m_rays_shader, "u_star_radius");
+    m_ray_seed_uniform_loc        = GetShaderLocation(m_rays_shader, "u_seed");
+    m_ray_color_near_uniform_loc  = GetShaderLocation(m_rays_shader, "u_ray_color_near");
+    m_ray_color_far_uniform_loc   = GetShaderLocation(m_rays_shader, "u_ray_color_far");
+    m_ray_tick_uniform_loc        = GetShaderLocation(m_rays_shader, "u_tick");
+    m_star_center_uniform_loc     = GetShaderLocation(m_rays_shader, "u_star_center");
 
     create_geo_location_cache();
-
-    randomize(gen);
 }
 
-void StarRenderer::render(const ControlledCamera& camera, int tick) const {
-    assert(m_initialized && "Must call initialize() first");
-
-    Vector3 center = { 0, 0, 0 };
-    render_rays(center, camera, tick);
-
-    SetShaderValue(m_shader, m_star_tick_uniform_loc, &tick, SHADER_UNIFORM_INT);
-    DrawModel(m_model, center, 1.0f, WHITE);
-
+StarRenderer::~StarRenderer() {
+    UnloadModel(m_model);
+    UnloadTexture(m_texture0);
+    UnloadTexture(m_texture1);
 }
 
-void StarRenderer::randomize(std::mt19937& gen) {
+void StarRenderer::prepare_render(const Star& star, std::mt19937& gen) {
 
-    enum StarColors {
-        C_WHITE, C_ORANGE, C_YELLOW, C_RED, C_LAST
-    };
-
-    std::uniform_int_distribution<> color_dist(0, C_LAST - 1);
-
-    switch (color_dist(gen)) {
-    case C_WHITE: {
+    switch (star.color) {
+    case StarColor::STAR_WHITE: {
         set_star_shader_color(m_dark_color_uniform_loc, 0xa9ded9);          // dark blue
         set_star_shader_color(m_dark_primary_color_uniform_loc, 0xc2f2ee);
         set_star_shader_color(m_bright_primary_color_uniform_loc, 0xedfffe);
@@ -104,7 +78,7 @@ void StarRenderer::randomize(std::mt19937& gen) {
         m_ray_color_near = 0xf0fffe;
         break;
     }
-    case C_ORANGE: {
+    case StarColor::STAR_ORANGE: {
         set_star_shader_color(m_dark_color_uniform_loc, 0xc71b04);           // dark red
         set_star_shader_color(m_dark_primary_color_uniform_loc, 0xe02500);   // red
         set_star_shader_color(m_bright_primary_color_uniform_loc, 0xf28211); // orange
@@ -114,7 +88,7 @@ void StarRenderer::randomize(std::mt19937& gen) {
         m_ray_color_near = 0xff9d2e;
         break;
     }
-    case C_YELLOW: {
+    case StarColor::STAR_YELLOW: {
         set_star_shader_color(m_dark_color_uniform_loc, 0xcf5702);           // dark red-orange
         set_star_shader_color(m_dark_primary_color_uniform_loc, 0xc95d04);   // orange
         set_star_shader_color(m_bright_primary_color_uniform_loc, 0xf5a12c); // yellow
@@ -124,7 +98,7 @@ void StarRenderer::randomize(std::mt19937& gen) {
         m_ray_color_near = 0xffe369;
         break;
     }
-    case C_RED: {
+    case StarColor::STAR_RED: {
         set_star_shader_color(m_dark_color_uniform_loc, 0xa61400); // dark red
         set_star_shader_color(m_dark_primary_color_uniform_loc, 0xc21b04); // red
         set_star_shader_color(m_bright_primary_color_uniform_loc, 0xf23005); // slightly less red
@@ -133,6 +107,9 @@ void StarRenderer::randomize(std::mt19937& gen) {
         m_ray_color_far = 0xc21b04;
         m_ray_color_near = 0xfa5320;
         break;
+    }
+    default: {
+        throw std::invalid_argument("Invalid star color");
     }
     };
 
@@ -151,67 +128,39 @@ void StarRenderer::randomize(std::mt19937& gen) {
     // 1.2 is what i had it at originally.
     std::uniform_real_distribution<float> ray_radius_dist(1.0f, 1.4f);
     m_rays_length = ray_radius_dist(gen);
+}
+
+void StarRenderer::render(const Star& star, const ControlledCamera& camera, int tick) const {
+
+    render_rays(star, camera, tick);
+
+    SetShaderValue(m_shader, m_star_tick_uniform_loc, &tick, SHADER_UNIFORM_INT);
+    DrawModel(m_model, star.position, star.radius, WHITE);
 
 }
 
-void StarRenderer::render_rays(const Vector3& center, const ControlledCamera& camera, int tick) const {
+void StarRenderer::render_rays(const Star& star, const ControlledCamera& camera, int tick) const {
+
 
     rlDisableBackfaceCulling();
-    BeginShaderMode(m_ray_shader);
+    rlDisableDepthMask();
+    BeginShaderMode(m_rays_shader);
 
-    SetShaderValue(m_ray_shader, m_star_center_uniform_loc, &center, RL_SHADER_UNIFORM_VEC3);
-    SetShaderValue(m_ray_shader, m_ray_length_uniform_loc, &m_rays_length, RL_SHADER_UNIFORM_FLOAT);
-    SetShaderValue(m_ray_shader, m_star_radius_uniform_loc, &m_radius, RL_SHADER_UNIFORM_FLOAT);
-    SetShaderValue(m_ray_shader, m_ray_seed_uniform_loc, &m_rays_seed, RL_SHADER_UNIFORM_UINT);
-    set_shader_color(m_ray_shader, m_ray_color_near_uniform_loc, m_ray_color_near);
-    set_shader_color(m_ray_shader, m_ray_color_far_uniform_loc, m_ray_color_far); // test color 0x42f581
-    SetShaderValue(m_ray_shader, m_ray_tick_uniform_loc, &tick, RL_SHADER_UNIFORM_INT);
+    SetShaderValue(m_rays_shader, m_star_center_uniform_loc, &star.position, RL_SHADER_UNIFORM_VEC3);
+    SetShaderValue(m_rays_shader, m_ray_length_uniform_loc, &m_rays_length, RL_SHADER_UNIFORM_FLOAT);
+    SetShaderValue(m_rays_shader, m_star_radius_uniform_loc, &star.radius, RL_SHADER_UNIFORM_FLOAT);
+    SetShaderValue(m_rays_shader, m_ray_seed_uniform_loc, &m_rays_seed, RL_SHADER_UNIFORM_UINT);
+    set_shader_color(m_rays_shader, m_ray_color_near_uniform_loc, m_ray_color_near);
+    set_shader_color(m_rays_shader, m_ray_color_far_uniform_loc, m_ray_color_far); // test color 0x42f581
+    SetShaderValue(m_rays_shader, m_ray_tick_uniform_loc, &tick, RL_SHADER_UNIFORM_INT);
 
-    render_rays_mesh(center, camera);
+    float r = star.radius + m_rays_length + 4.0f;
+    render_billboard(camera, star.position, r);
 
     EndShaderMode();
+    rlEnableDepthMask();
     rlEnableBackfaceCulling();
 
-}
-
-void StarRenderer::render_rays_mesh(const Vector3& center, const ControlledCamera& camera) const {
-
-    Camera rl_camera = camera.get_raylib_camera();
-    Vector3 forward = Vector3Normalize(rl_camera.target - rl_camera.position);
-    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, rl_camera.up));
-    Vector3 up = Vector3Normalize(Vector3CrossProduct(right, forward));
-
-    float plane_radius = m_radius + m_rays_length;
-
-    rlBegin(RL_QUADS);
-
-        plane_radius += 4.0;
-
-        rlTexCoord2f(0, 0);
-        rlVertex3f(
-            center.x + (-right.x * plane_radius) + (-up.x * plane_radius),
-            center.y + (-right.y * plane_radius) + (-up.y * plane_radius),
-            center.z + (-right.z * plane_radius) + (-up.z * plane_radius)
-        );
-        rlTexCoord2f(1, 0);
-        rlVertex3f(
-            center.x + (+right.x * plane_radius) + (-up.x * plane_radius),
-            center.y + (+right.y * plane_radius) + (-up.y * plane_radius),
-            center.z + (+right.z * plane_radius) + (-up.z * plane_radius)
-        );
-        rlTexCoord2f(1, 1);
-        rlVertex3f(
-            center.x + (+right.x * plane_radius) + (+up.x * plane_radius),
-            center.y + (+right.y * plane_radius) + (+up.y * plane_radius),
-            center.z + (+right.z * plane_radius) + (+up.z * plane_radius)
-        );
-        rlTexCoord2f(0, 1);
-        rlVertex3f(
-            center.x + (-right.x * plane_radius) + (+up.x * plane_radius),
-            center.y + (-right.y * plane_radius) + (+up.y * plane_radius),
-            center.z + (-right.z * plane_radius) + (+up.z * plane_radius)
-        );
-    rlEnd();
 }
 
 void StarRenderer::set_star_shader_color(int uniform_loc, int hex_color) const {

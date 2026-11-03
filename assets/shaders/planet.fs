@@ -1,17 +1,16 @@
 #version 330
 
-in vec3 fragPosition;
 in vec3 fragNormal;
 
 out vec4 finalColor;
+
+uniform vec3 u_direction_to_star;
 
 void main() {
 
     vec4 albedo = vec4(1.0, 1.0, 1.0, 1.0);
 
-    vec3 sunDirection = vec3(-0.5, -1, -0.5);
-
-    float diffuse = max(dot(fragNormal, normalize(-sunDirection)), 0.0);
+    float diffuse = max(dot(fragNormal, normalize(u_direction_to_star)), 0.0);
     float ambient = 0.3;
 
     diffuse *= (1.0 - ambient);

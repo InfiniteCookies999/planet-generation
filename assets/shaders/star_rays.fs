@@ -76,8 +76,9 @@ void main() {
     const float ADD_FACTOR = 0.5;
 
     // compute distance from center.
-    float dist = length(fragPosition - u_star_center);
-    dist -= u_star_radius; // absolute distance offset from star.
+    // TODO (maddie): we could potentially do this in squared units instead.
+    float abs_dist = length(fragPosition - u_star_center);
+    float dist = abs_dist - u_star_radius; // absolute distance offset from star.
 
     float angle = atan(fragTexCoord.y - 0.5, fragTexCoord.x - 0.5);
     if (angle < 0.0) angle += 2.0 * PI;
@@ -109,8 +110,8 @@ void main() {
     l = clamp(l, 0.0, 1.0);
 
     // background glow
-    float glow_dist = length(fragPosition - u_star_center);
-    glow_dist -= u_star_radius;
+    // TODO (maddie): we could potentially do this in squared units instead.
+    float glow_dist = abs_dist - u_star_radius;
     glow_dist /= ((u_rays_length + u_star_radius) + 0.9) - u_star_radius;
     float glow_t = 1.0 - glow_dist;
     if (glow_t < 0.0) glow_t = 0.0;

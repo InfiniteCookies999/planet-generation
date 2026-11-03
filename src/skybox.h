@@ -8,7 +8,7 @@
 class Skybox {
 public:
 
-    Skybox(Shader shader);
+    Skybox(Shader shader, std::mt19937& gen);
 
     // Don't move or copy.
     // ---------------------
@@ -17,8 +17,6 @@ public:
     Skybox& operator=(const Skybox&) = delete;
     Skybox& operator=(Skybox&&) = delete;
 
-    void initialize(std::mt19937& gen);
-
     void render();
 
     ~Skybox();
@@ -26,10 +24,10 @@ public:
 private:
     const Shader m_shader;
 
-    bool m_initialized;
-
     TextureCubemap m_cubemap_texture;
     Model m_model;
+
+    void initialize(std::mt19937& gen);
 
     static std::vector<uint32_t> create_side_texture(std::mt19937& gen);
 };

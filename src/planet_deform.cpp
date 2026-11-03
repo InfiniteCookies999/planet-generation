@@ -9,7 +9,7 @@
 #include <raymath.h>
 
 
-Geometry create_deformed_planet(std::mt19937& gen,float radius) {
+Geometry create_deformed_planet(std::mt19937& gen, float radius) {
 
     Geometry geom = create_icosphere_geometry(3, 3);
 

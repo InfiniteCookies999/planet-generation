@@ -13,21 +13,20 @@ constexpr float STAR_CHANCE = (STAR_COUNT / 6.0f) / (RES * RES);
 static void rgb_to_hsv(int r, int g, int b, float hsv[3]);
 static int hsv_to_rgb(float hue, float saturation, float brightness);
 
-Skybox::Skybox(Shader shader)
+Skybox::Skybox(Shader shader, std::mt19937& gen)
     : m_shader(shader)
-    , m_initialized(false)
 {
+    initialize(gen);
 }
 
 void Skybox::initialize(std::mt19937& gen) {
-    m_initialized = true;
 
     m_model = LoadModelFromMesh(GenMeshCube(1, 1, 1));
 
     // TODO (maddie): using a skybox may be less efficient than just
     // rendering out quads.
 
-    Image cubemap_image = { 0 };
+    Image cubemap_image{};
     cubemap_image.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
     cubemap_image.width = RES;
     cubemap_image.height = RES * 6;
@@ -44,15 +43,14 @@ void Skybox::initialize(std::mt19937& gen) {
     m_cubemap_texture = LoadTextureCubemap(cubemap_image, CUBEMAP_LAYOUT_LINE_VERTICAL);
 
     int m_map_uniform_loc = GetShaderLocation(m_shader, "environmentMap");
-    SetShaderValue(m_shader, m_map_uniform_loc, (int[1]){ MATERIAL_MAP_CUBEMAP }, SHADER_UNIFORM_INT);
+    int material_map_cubemap_value = MATERIAL_MAP_CUBEMAP;
+    SetShaderValue(m_shader, m_map_uniform_loc, &material_map_cubemap_value, SHADER_UNIFORM_INT);
 
     m_model.materials[0].shader = m_shader;
     m_model.materials[0].maps[MATERIAL_MAP_CUBEMAP].texture = m_cubemap_texture;
 }
 
 void Skybox::render() {
-    assert(m_initialized && "Must call initialize() first");
-
     rlDisableBackfaceCulling();
     rlDisableDepthMask();
     DrawModel(m_model, {0, 0, 0}, 1.0f, WHITE);
@@ -129,9 +127,6 @@ std::vector<uint32_t> Skybox::create_side_texture(std::mt19937& gen) {
 }
 
 Skybox::~Skybox() {
-    if (!m_initialized) {
-        return;
-    }
     UnloadTexture(m_cubemap_texture);
     UnloadModel(m_model);
 }

@@ -1,6 +1,5 @@
 #version 330
 
-in vec3 fragPosition;
 in vec2 fragTexCoord;
 
 out vec4 finalColor;

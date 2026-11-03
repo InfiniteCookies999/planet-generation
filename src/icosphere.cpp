@@ -77,7 +77,7 @@ Mesh create_perpendicular_golden_rectangle_mesh() {
 
     constexpr int NUM_TRIANGLES = 6;
 
-    Mesh mesh = { 0 };
+    Mesh mesh{};
     mesh.triangleCount = NUM_TRIANGLES;
     mesh.vertexCount = mesh.triangleCount * 3;
     // Not using new operator because UnloadMesh may rely on the implementation of MemAlloc.
@@ -112,7 +112,7 @@ Mesh create_perpendicular_golden_rectangle_mesh() {
 
 Mesh create_icosahedron_mesh() {
 
-    Mesh mesh = { 0 };
+    Mesh mesh{};
     mesh.triangleCount = NUM_TRIANGLES;
     mesh.vertexCount = mesh.triangleCount * 3;
     // Not using new operator because UnloadMesh may rely on the implementation of MemAlloc.
