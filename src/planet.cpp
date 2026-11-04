@@ -1,5 +1,6 @@
 #include "planet.h"
 #include "icosphere.h"
+#include "star.h"
 
 #include <algorithm>
 #include <cassert>
@@ -9,13 +10,19 @@
 #include <raymath.h>
 #include <utility>
 
-static OrbitalParameters generate_random_orbital_params(const Planet* prev_planet, std::mt19937& gen) {
+static OrbitalParameters generate_random_orbital_params(
+    const Star& star,
+    const Planet* prev_planet,
+    std::mt19937& gen
+) {
 
     constexpr float ABS_MAX_ECCENTRICITY = 0.85f;
     constexpr float MAJOR_AXIS_SEPARATION = 20.0f;
     constexpr float MINOR_AXIS_SEPARATION = 20.0f;
 
-    float min_semi_major_axis = 120.0f;
+    float star_radius_add = std::max(0.0f, star.radius - 4.0f);
+    star_radius_add = pow(star_radius_add, 1.6f);
+    float min_semi_major_axis = 120.0f + star_radius_add;
     float min_semi_minor_axis = 0.0f;
     float max_eccentricity = ABS_MAX_ECCENTRICITY;
     float min_eccentricity = 0.0f;
@@ -113,9 +120,13 @@ static OrbitalParameters generate_random_orbital_params(const Planet* prev_plane
     };
 }
 
-Planet::Planet(Shader planet_shader, const OrbitalParameters& orbital_params)
+Planet::Planet(
+    Shader planet_shader,
+    const OrbitalParameters& orbital_params,
+    float max_lod_radius
+)
     : m_orbital_params(orbital_params)
-    , m_max_lod_radius(2.0f)
+    , m_max_lod_radius(max_lod_radius)
 {
     m_model = LoadModelFromMesh(create_icosphere_mesh(4, m_max_lod_radius));
     m_model.materials[0].shader = planet_shader;
@@ -123,10 +134,27 @@ Planet::Planet(Shader planet_shader, const OrbitalParameters& orbital_params)
 
 Planet Planet::generate_random_planet(
     Shader planet_shader,
+    const Star& star,
     const Planet* prev_planet,
     std::mt19937& gen
 ) {
-    return Planet(planet_shader, generate_random_orbital_params(prev_planet, gen));
+    OrbitalParameters orbital_params = generate_random_orbital_params(star, prev_planet, gen);
+
+    // 4.0f rough central star size. Use sqrt so the planets do not become
+    // very large just because the star does.
+    float max_radius = 2.4f/4.0f * std::sqrtf(star.radius);
+    float min_radius = 1.6f/4.0f * std::sqrtf(star.radius);
+    float mean_radius = (max_radius + min_radius) * 0.5f;
+
+    // Divide by 2 since 2 std deviations results in ~95% of the values between
+    // min and max radius being covered.
+    float stddev = (mean_radius - min_radius) * 0.5f;
+    std::normal_distribution<float> radius_distribution(mean_radius, stddev);
+
+    float radius = radius_distribution(gen);
+    radius = std::clamp(radius, min_radius, max_radius);
+
+    return Planet(planet_shader, orbital_params, radius);
 }
 
 Planet::Planet(Planet&& other) noexcept {
@@ -142,7 +170,20 @@ Planet& Planet::operator=(Planet&& other) {
     return *this;
 }
 
-void Planet::update() {
+void Planet::update(bool orbit_ring_selected) {
+
+    if (orbit_ring_selected) {
+        ++m_orbit_ring_selected_ticks;
+        if (m_orbit_ring_selected_ticks > MAX_ORBIT_RING_SELECT_TICKS) {
+            m_orbit_ring_selected_ticks = MAX_ORBIT_RING_SELECT_TICKS;
+        }
+    } else {
+        --m_orbit_ring_selected_ticks;
+        if (m_orbit_ring_selected_ticks < 0) {
+            m_orbit_ring_selected_ticks = 0;
+        }
+    }
+
     // TODO (maddie):
     // Proper orbit path so it doesnt have weird slowdown at the ends.
     // Since there is no intent to generate a highly accurate simulation

@@ -7,9 +7,8 @@
 
 void render_billboard(const ControlledCamera& camera, Vector3 center, float half_size) {
 
-    Camera rl_camera = camera.get_raylib_camera();
-    Vector3 forward = Vector3Normalize(rl_camera.target - rl_camera.position);
-    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, rl_camera.up));
+    Vector3 forward = camera.get_forward();
+    Vector3 right = Vector3Normalize(Vector3CrossProduct(forward, camera.get_up()));
     Vector3 up = Vector3Normalize(Vector3CrossProduct(right, forward));
 
     rlPushMatrix();

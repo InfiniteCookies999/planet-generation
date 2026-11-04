@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <assert.h>
 #include <cmath>
+#include <iostream>
 #include <raylib.h>
 #include <raymath.h>
 
@@ -31,6 +32,7 @@ ControlledCamera::ControlledCamera(Vector3 target, const CameraParams& params)
 }
 
 void ControlledCamera::update(float dt) {
+
     if (IsMouseButtonPressed(MOUSE_MIDDLE_BUTTON)) {
         m_start_pan_mouse_position = GetMousePosition();
     }
@@ -52,29 +54,62 @@ void ControlledCamera::update(float dt) {
         m_distance_to_target = std::clamp(m_distance_to_target, m_min_zoom, m_max_zoom);
     }
 
-    // Move towards the destination target position.
-    if (Vector3Length(m_destination_target - m_camera.target) < 0.1f) {
-        m_camera.target = m_destination_target;
-    } else {
-        const float MIN_SPEED = 0.001f;
-        const float MAX_SPEED = 6.0f;
-        Vector3 step = (m_destination_target - m_camera.target) * 0.5;
-        float speed = Vector3Length(step);
-        if (speed < MIN_SPEED) {
-            step = Vector3Normalize(m_destination_target - m_camera.target) * MIN_SPEED;
-        } else if (speed > MAX_SPEED) {
-            step = Vector3Normalize(m_destination_target - m_camera.target) * MAX_SPEED;
-        }
-
-        m_camera.target = m_camera.target + step * dt * 24.0f;
-    }
+    lerp_to_target(dt);
 
     compute_position_from_yaw_and_pitch();
     UpdateCamera(&m_camera, CAMERA_CUSTOM);
 }
 
-void ControlledCamera::set_target(Vector3 target) {
+void ControlledCamera::set_target(Vector3 target, bool is_new_target) {
     m_destination_target = target;
+    if (is_new_target) {
+        caught_up_to_target = false;
+        m_destination_target_last_frame = target;
+    }
+}
+
+Vector3 ControlledCamera::get_forward() const {
+    return Vector3Normalize(m_camera.target - m_camera.position);
+}
+
+void ControlledCamera::lerp_to_target(float dt) {
+    if (caught_up_to_target) {
+        m_camera.target = m_destination_target;
+        return;
+    }
+
+    // Determine how fast the body being targeted is to be used as a stopping
+    // condition.
+    float target_speed = Vector3Length(m_destination_target - m_destination_target_last_frame);
+
+    float old_distance = Vector3Length(m_destination_target - m_camera.target);
+
+    const float MIN_SPEED = 0.001f;
+    const float MAX_SPEED = 6.0f;
+
+    Vector3 step = (m_destination_target - m_camera.target) * 0.5f;
+    float speed = Vector3Length(step);
+    if (speed < MIN_SPEED) {
+        step = Vector3Normalize(m_destination_target - m_camera.target) * MIN_SPEED;
+    } else if (speed > MAX_SPEED) {
+        step = Vector3Normalize(m_destination_target - m_camera.target) * MAX_SPEED;
+    }
+
+    m_camera.target = m_camera.target + step * dt * 24.0f;
+
+    // If the amount the camera moved towards the target is less than its speed then
+    // we are considered having caught up to the target.
+    //
+    // Overstepping should not be possible since this always takes steps to be halfway
+    // between the current target and the destination target.
+    float new_distance = Vector3Length(m_destination_target - m_camera.target);
+    float distance_closed = old_distance - new_distance;
+    if (distance_closed < target_speed) {
+        caught_up_to_target = true;
+        m_camera.target = m_destination_target;
+    }
+
+    m_destination_target_last_frame = m_destination_target;
 }
 
 void ControlledCamera::compute_position_from_yaw_and_pitch() {

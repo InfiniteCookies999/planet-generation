@@ -20,7 +20,8 @@ public:
     void render(
         const ControlledCamera& camera,
         const Planet& planet,
-        Vector3 star_position
+        Vector3 star_position,
+        bool planet_focused
     ) const;
 
 private:
@@ -38,11 +39,13 @@ private:
     int m_planar_forward_dot_uniform_loc;
     int m_znear_uniform_loc;
     int m_zfar_uniform_loc;
+    int m_orbit_ring_selected_t;
 
     void render_orbit(
         const ControlledCamera& camera,
         const Planet& planet,
-        Vector3 star_position
+        Vector3 star_position,
+        bool planet_focused
     ) const;
 
 };

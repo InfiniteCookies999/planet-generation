@@ -1,5 +1,7 @@
 #pragma once
 
+#include "star.h"
+
 #include <random>
 #include <raylib.h>
 
@@ -16,7 +18,11 @@ struct OrbitalParameters {
 class Planet {
 public:
 
-    Planet(Shader planet_shader, const OrbitalParameters& orbital_params);
+    Planet(
+        Shader planet_shader,
+        const OrbitalParameters& orbital_params,
+        float max_lod_radius
+    );
 
     /**
      * @param prev_planet The last planet generated that is closer to the
@@ -24,6 +30,7 @@ public:
      */
     static Planet generate_random_planet(
         Shader planet_shader,
+        const Star& star,
         const Planet* prev_planet,
         std::mt19937& gen
     );
@@ -36,7 +43,7 @@ public:
     Planet(const Planet&) = delete;
     Planet& operator=(const Planet& other) = delete;
 
-    void update();
+    void update(bool orbit_ring_selected);
 
     Vector3 get_position(Vector3 star_position) const;
 
@@ -56,6 +63,10 @@ public:
         return m_max_lod_radius;
     }
 
+    int get_orbit_ring_selected_ticks() const {
+        return m_orbit_ring_selected_ticks;
+    }
+
     ~Planet();
 
 private:
@@ -63,6 +74,15 @@ private:
     float m_max_lod_radius;
 
     Model m_model;
+
+public:
+    static const int MAX_ORBIT_RING_SELECT_TICKS = 20;
+private:
+    // For how many ticks it has been selected. The value
+    // MAX_ORBIT_RING_SELECT_TICKS behaves as an upper limit
+    // and once that limit is reached its considered fully
+    // selected.
+    int m_orbit_ring_selected_ticks = 0;
 
     void move_from(Planet&& other) noexcept;
 };

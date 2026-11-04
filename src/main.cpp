@@ -7,7 +7,6 @@
 #include "star_renderer.h"
 #include "planet.h"
 
-#include <algorithm>
 #include <iostream>
 #include <limits>
 #include <random>
@@ -20,7 +19,21 @@
 static long long current_time_nanoseconds();
 static double current_time_milliseconds();
 
-static std::pair<const Planet*, const Star*> mouse_pick_planet_or_star(
+struct MousePick {
+    enum class Type {
+        NONE,
+        PLANET,
+        STAR,
+        PLANET_ORBIT_RING
+    } type;
+
+    union {
+        const Planet* planet;
+        const Star* star;
+    };
+};
+
+static MousePick mouse_pick_planet_or_star(
     const ControlledCamera& camera,
     const std::vector<Planet>& planets,
     const Star& star
@@ -34,6 +47,7 @@ static void render_select_ring(
 );
 
 static void generate_random_planets(
+    const Star& star,
     std::vector<Planet>& planets,
     std::mt19937& gen,
     Shader planet_shader
@@ -64,7 +78,7 @@ int main() {
     );
     //RL_CULL_DISTANCE_FAR
     //RL_CULL_DISTANCE_FAR
-    //rlSetClipPlanes(0.1f, 200.0f);
+    // rlSetClipPlanes(0.01f, 2000.0f);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -90,11 +104,10 @@ int main() {
     Star star = create_randomized_star(gen);
     star_renderer.prepare_render(star, gen);
 
-    int num_planets = 4;
-
     std::vector<Planet> planets;
-    generate_random_planets(planets, gen, planet_shader);
+    generate_random_planets(star, planets, gen, planet_shader);
 
+    const Planet* prev_focused_planet = nullptr;
     const Planet* focused_planet = nullptr;
 
     double frame_time = 0;
@@ -103,29 +116,44 @@ int main() {
 
         long long start_time = current_time_nanoseconds();
 
-        auto [planet_hit, star_hit] = mouse_pick_planet_or_star(camera, planets, star);
+        MousePick mouse_pick = mouse_pick_planet_or_star(camera, planets, star);
 
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            if (planet_hit) {
-                focused_planet = planet_hit;
-            } else if (star_hit) {
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+            mouse_pick.type != MousePick::Type::NONE) {
+
+            if (mouse_pick.type == MousePick::Type::PLANET ||
+                mouse_pick.type == MousePick::Type::PLANET_ORBIT_RING) {
+                focused_planet = mouse_pick.planet;
+            } else if (mouse_pick.type == MousePick::Type::STAR) {
                 focused_planet = nullptr; // Go back to focusing the star.
             }
         }
-
-
-        if (focused_planet) {
-            camera.set_target(focused_planet->get_position(star.position));
-        } else {
-            camera.set_target(star.position);
-        }
-        camera.update(GetFrameTime());
+        bool planet_focus_changed = prev_focused_planet != focused_planet;
+        prev_focused_planet = focused_planet;
 
 
         // Update after so mouse picking uses last frame's position information.
         for (Planet& planet : planets) {
-            planet.update();
+            bool orbit_ring_selected = false;
+            if (mouse_pick.type == MousePick::Type::PLANET_ORBIT_RING ||
+                mouse_pick.type == MousePick::Type::PLANET) {
+                orbit_ring_selected = mouse_pick.planet == &planet;
+            }
+            planet.update(orbit_ring_selected);
         }
+
+        // Set target after updating planets so it focuses correctly on what
+        // is being rendered.
+        if (focused_planet) {
+            camera.set_target(focused_planet->get_position(star.position), planet_focus_changed);
+            camera.set_min_zoom(focused_planet->get_max_lod_radius() + 2.0f);
+        } else {
+            camera.set_target(star.position, planet_focus_changed);
+            camera.set_min_zoom(star.radius + 3.0f);
+        }
+        // camera.set_target(example_planet.get_position(star.position));
+        camera.update(GetFrameTime());
+
 
 
         BeginDrawing();
@@ -137,15 +165,23 @@ int main() {
 
         skybox.render();
 
-        if (planet_hit) {
-            if (focused_planet != planet_hit) {
-                Vector3 center = planet_hit->get_position(star.position);
-                render_select_ring(camera, select_ring_shader, center, planet_hit->get_max_lod_radius());
+        switch (mouse_pick.type) {
+        case MousePick::Type::PLANET: {
+            if (focused_planet != mouse_pick.planet) {
+                const Planet* hit_planet = mouse_pick.planet;
+                Vector3 center = hit_planet->get_position(star.position);
+                render_select_ring(camera, select_ring_shader, center, hit_planet->get_max_lod_radius());
             }
-        } else if (star_hit) {
+            break;
+        }
+        case MousePick::Type::STAR: {
             if (focused_planet) {
                 render_select_ring(camera, select_ring_shader, star.position, star.radius);
             }
+            break;
+        }
+        default:
+            break;
         }
 
         if (IsKeyPressed(KEY_F1)) {
@@ -157,11 +193,16 @@ int main() {
 
             focused_planet = nullptr;
             planets.clear();
-            generate_random_planets(planets, gen, planet_shader);
+            generate_random_planets(star, planets, gen, planet_shader);
         }
 
         for (const Planet& planet : planets) {
-            planet_renderer.render(camera, planet, star.position);
+            planet_renderer.render(
+                camera,
+                planet,
+                star.position,
+                focused_planet == &planet
+            );
         }
 
         star_renderer.render(star, camera, tick);
@@ -178,6 +219,7 @@ int main() {
 
         long long frame_duration = current_time_nanoseconds() - start_time;
         frame_time = frame_duration * 1e-6;
+
     }
 
     UnloadFont(font_x24);
@@ -190,7 +232,7 @@ int main() {
     return 0;
 }
 
-static std::pair<const Planet*, const Star*> mouse_pick_planet_or_star(
+static MousePick mouse_pick_planet_or_star(
     const ControlledCamera& camera,
     const std::vector<Planet>& planets,
     const Star& star
@@ -198,28 +240,69 @@ static std::pair<const Planet*, const Star*> mouse_pick_planet_or_star(
     // TODO (maddie):
     // maybe increase the click distance the further away from the camera it is.
 
-    const Planet* planet_hit = nullptr;
+    MousePick pick{};
+    pick.type = MousePick::Type::NONE;
+
+    Ray ray = GetScreenToWorldRay(GetMousePosition(), camera.get_raylib_camera());
 
     float closest_distance = std::numeric_limits<float>::max();
     for (const Planet& planet : planets) {
         Vector3 planet_position = planet.get_position(star.position);
 
-        Ray ray = GetScreenToWorldRay(GetMousePosition(), camera.get_raylib_camera());
         float pick_radius = planet.get_max_lod_radius() + 2.0f; // planets can be rather small increase radius.
         RayCollision collision = GetRayCollisionSphere(ray, planet_position, pick_radius);
         if (collision.hit && collision.distance < closest_distance) {
-            planet_hit = &planet;
+            pick.type = MousePick::Type::PLANET;
+            pick.planet = &planet;
             closest_distance = collision.distance;
+            continue; // Don't continue to check for ring intersection.
+        }
+
+
+
+        // Intersection code with orbit ring.
+        auto& orbital_params = planet.get_orbital_params();
+        // We want to determine the intersection point with a xz plane lying on the orbits plane.
+        // For now that is at y=0.
+        Vector3 p0 = { 0, 0, 0 };
+        Vector3 l0 = ray.position;
+        Vector3 plane_normal = { 0, 1, 0 };
+        float dem = Vector3DotProduct(ray.direction, plane_normal);
+        if (FloatEquals(dem, 0.0f)) {
+            // Forward is parallel to the plane.
+            continue;
+        }
+        float d = Vector3DotProduct(p0 - l0, plane_normal) / dem;
+        if (d >= closest_distance) {
+            continue;
+        }
+
+        Vector3 hit_point = l0 + ray.direction * d;
+
+        float ratio = orbital_params.semi_major_axis / orbital_params.semi_minor_axis;
+
+        Vector3 focus = star.position + Vector3{ orbital_params.linear_eccentricity, 0, 0 };
+        Vector2 offset = Vector2{ hit_point.x, hit_point.z } - Vector2{ focus.x, focus.z };
+        offset = Vector2{ offset.x, offset.y * ratio };
+        float dist = Vector2Length(offset);
+
+        // TODO (maddie): this is mathematically correct but probably needs scaled by camera distance.
+        float local_dist = std::abs(dist - orbital_params.semi_major_axis);
+        float thickness = 0.8f + 4.0f; // TODO (maddie): copied from renderer code.
+        if (local_dist < thickness) {
+            pick.type = MousePick::Type::PLANET_ORBIT_RING;
+            pick.planet = &planet;
+            closest_distance = d;
         }
     }
 
-    Ray ray = GetScreenToWorldRay(GetMousePosition(), camera.get_raylib_camera());
     RayCollision collision = GetRayCollisionSphere(ray, star.position, star.radius);
     if (collision.hit && collision.distance < closest_distance) {
-        return { nullptr, &star };
+        pick.type = MousePick::Type::STAR;
+        pick.star = &star;
     }
 
-    return { planet_hit, nullptr };
+    return pick;
 }
 
 static void render_select_ring(
@@ -246,6 +329,7 @@ static void render_select_ring(
 }
 
 static void generate_random_planets(
+    const Star& star,
     std::vector<Planet>& planets,
     std::mt19937& gen,
     Shader planet_shader
@@ -261,7 +345,7 @@ static void generate_random_planets(
         Planet* prev_planet = i != 0
             ? &planets.back()
             : nullptr;
-        planets.push_back(Planet::generate_random_planet(planet_shader, prev_planet, gen));
+        planets.push_back(Planet::generate_random_planet(planet_shader, star, prev_planet, gen));
     }
     // Ditribute the planets true anomalies.
     for (int i = 0; i < num_planets; i++) {

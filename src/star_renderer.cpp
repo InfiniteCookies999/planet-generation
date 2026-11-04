@@ -11,7 +11,6 @@
 #include "billboard_render.h"
 #include "controlled_camera.h"
 #include "perlin_noise.h"
-#include "raymath.h"
 #include "uvsphere.h"
 
 
@@ -125,9 +124,11 @@ void StarRenderer::prepare_render(const Star& star, std::mt19937& gen) {
     std::uniform_int_distribution<unsigned> ray_seed_dist;
     m_rays_seed = ray_seed_dist(gen);
 
-    // 1.2 is what i had it at originally.
     std::uniform_real_distribution<float> ray_radius_dist(1.0f, 1.4f);
     m_rays_length = ray_radius_dist(gen);
+
+    float scale = std::max(0.0f, star.radius - 4.0f) * 0.2f;
+    m_rays_length *= (scale + 1.0f);
 }
 
 void StarRenderer::render(const Star& star, const ControlledCamera& camera, int tick) const {
