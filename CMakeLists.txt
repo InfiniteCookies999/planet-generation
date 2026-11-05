@@ -20,7 +20,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(raylib)
 
 add_executable(planet_generation "src/main.cpp" "src/text_3d.cpp" "src/icosphere.cpp" "src/uvsphere.cpp"
-                                 "src/geometry.cpp" "src/planet_deform.cpp" "src/perlin_noise.cpp"
+                                 "src/geometry.cpp" "src/perlin_noise.cpp"
                                  "src/controlled_camera.cpp" "src/star_renderer.cpp" "src/skybox.cpp"
                                  "src/simplex_noise.cpp" "src/planet_renderer.cpp" "src/planet.cpp"
                                  "src/star.cpp" "src/billboard_render.cpp")

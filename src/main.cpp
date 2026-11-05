@@ -1,11 +1,13 @@
 
 #include "billboard_render.h"
 #include "controlled_camera.h"
+#include "ex_math.h"
 #include "planet_renderer.h"
 #include "skybox.h"
 #include "star.h"
 #include "star_renderer.h"
 #include "planet.h"
+#include "text_3d.h"
 
 #include <iostream>
 #include <limits>
@@ -65,6 +67,7 @@ int main() {
     Shader skybox_shader = LoadShader("assets/shaders/skybox.vs", "assets/shaders/skybox.fs");
     Shader orbit_shader = LoadShader("assets/shaders/orbit.vs", "assets/shaders/orbit.fs");
     Shader select_ring_shader = LoadShader("assets/shaders/select_ring.vs", "assets/shaders/select_ring.fs");
+    Shader discard_alpha_shader = LoadShader(NULL, "assets/shaders/discard_zero_alpha.fs");
 
     ControlledCamera camera(
         { 0, 0, 0 },
@@ -100,6 +103,7 @@ int main() {
         codepoints.push_back(static_cast<int>(characters[i]));
     }
     Font font_x24 = LoadFontEx("assets/fonts/DejaVuSansMono.ttf", 24, &codepoints[0], 95);
+    Font font_x64 = LoadFontEx("assets/fonts/DejaVuSansMono.ttf", 64, &codepoints[0], 95);
 
     Star star = create_randomized_star(gen);
     star_renderer.prepare_render(star, gen);
@@ -151,7 +155,6 @@ int main() {
             camera.set_target(star.position, planet_focus_changed);
             camera.set_min_zoom(star.radius + 3.0f);
         }
-        // camera.set_target(example_planet.get_position(star.position));
         camera.update(GetFrameTime());
 
 
@@ -196,6 +199,19 @@ int main() {
             generate_random_planets(star, planets, gen, planet_shader);
         }
 
+        // DrawGrid(50.0f, 1.0f);
+        // { // Render coordinates text.
+        //     BeginShaderMode(discard_alpha_shader);
+
+        //     draw_text_3d(font_x64, "+X", Vector3{ +24, 0, 0 }, 0.5f,  0.5f, 0.0f, true, BLUE);
+        //     draw_text_3d(font_x64, "-X", Vector3{ -25, 0, 0 }, 0.5f,  0.5f, 0.0f, true, BLUE);
+
+        //     draw_text_3d(font_x64, "+Z", Vector3{ 0, 0, +24 }, 0.5f,  0.5f, 0.0f, true, BLUE);
+        //     draw_text_3d(font_x64, "-Z", Vector3{ 0, 0, -25 }, 0.5f,  0.5f, 0.0f, true, BLUE);
+
+        //     EndShaderMode();
+        // }
+
         for (const Planet& planet : planets) {
             planet_renderer.render(
                 camera,
@@ -223,10 +239,12 @@ int main() {
     }
 
     UnloadFont(font_x24);
+    UnloadFont(font_x64);
     UnloadShader(planet_shader);
     UnloadShader(star_shader);
     UnloadShader(skybox_shader);
     UnloadShader(select_ring_shader);
+    UnloadShader(discard_alpha_shader);
     CloseWindow();
 
     return 0;
@@ -237,8 +255,6 @@ static MousePick mouse_pick_planet_or_star(
     const std::vector<Planet>& planets,
     const Star& star
 ) {
-    // TODO (maddie):
-    // maybe increase the click distance the further away from the camera it is.
 
     MousePick pick{};
     pick.type = MousePick::Type::NONE;
@@ -262,11 +278,13 @@ static MousePick mouse_pick_planet_or_star(
 
         // Intersection code with orbit ring.
         auto& orbital_params = planet.get_orbital_params();
-        // We want to determine the intersection point with a xz plane lying on the orbits plane.
-        // For now that is at y=0.
-        Vector3 p0 = { 0, 0, 0 };
+
+        // Use the focus point as the point on the plane.
+        Vector3 focus = planet.get_orbit_focus(star.position);
+
+        Vector3 p0 = focus;
         Vector3 l0 = ray.position;
-        Vector3 plane_normal = { 0, 1, 0 };
+        Vector3 plane_normal = orbital_params.plane_normal;
         float dem = Vector3DotProduct(ray.direction, plane_normal);
         if (FloatEquals(dem, 0.0f)) {
             // Forward is parallel to the plane.
@@ -281,14 +299,25 @@ static MousePick mouse_pick_planet_or_star(
 
         float ratio = orbital_params.semi_major_axis / orbital_params.semi_minor_axis;
 
-        Vector3 focus = star.position + Vector3{ orbital_params.linear_eccentricity, 0, 0 };
-        Vector2 offset = Vector2{ hit_point.x, hit_point.z } - Vector2{ focus.x, focus.z };
+        // Apply transition to do the math within the coordinates of the orbital plane.
+        Vector3 t_focus = Vector3RotateByQuaternion(focus, orbital_params.transition);
+        Vector3 t_hit_point = Vector3RotateByQuaternion(hit_point, orbital_params.transition);
+
+        Vector2 offset = Vector2{ t_hit_point.x, t_hit_point.z } - Vector2{ t_focus.x, t_focus.z };
         offset = Vector2{ offset.x, offset.y * ratio };
         float dist = Vector2Length(offset);
 
-        // TODO (maddie): this is mathematically correct but probably needs scaled by camera distance.
+        float planar_forward_dot = std::abs(
+            Vector3DotProduct(orbital_params.plane_normal, camera.get_forward())
+        );
+        float distance_from_camera = Vector3Distance(hit_point, camera.get_position());
+        float zfar = rlGetCullDistanceFar();
+        float distance_adj = distance_from_camera / zfar;
+
+
         float local_dist = std::abs(dist - orbital_params.semi_major_axis);
-        float thickness = 0.8f + 4.0f; // TODO (maddie): copied from renderer code.
+        // TODO (maddie): 0.8f value copied from renderer code.
+        float thickness = 0.8f + 3.0f + (distance_adj * 1.5f) * (1.0f - planar_forward_dot);
         if (local_dist < thickness) {
             pick.type = MousePick::Type::PLANET_ORBIT_RING;
             pick.planet = &planet;

@@ -4,7 +4,6 @@ in vec3 fragPosition;
 
 out vec4 finalColor;
 
-uniform vec3 u_center;
 uniform float u_thickness;
 uniform float u_semi_major_axis;
 uniform float u_semi_minor_axis;
@@ -22,7 +21,7 @@ void main() {
 
     float ratio = u_semi_major_axis / u_semi_minor_axis;
 
-    vec2 d = fragPosition.xz - u_center.xz;
+    vec2 d = fragPosition.xz;
     d = vec2(d.x, d.y * ratio);
 
     float dist = length(d);

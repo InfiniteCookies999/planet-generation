@@ -1,4 +1,5 @@
 #include "planet.h"
+#include "ex_math.h"
 #include "icosphere.h"
 #include "star.h"
 
@@ -96,7 +97,7 @@ static OrbitalParameters generate_random_orbital_params(
 
         float s0 = std::abs(prev_eccentricity - min_eccentricity);
         float s1 = std::abs(prev_eccentricity - max_eccentricity);
-        float stddev = std::max(s0, s1) * 3.0f;
+        float stddev = std::max(s0, s1) * 0.5f;
         std::normal_distribution<float> eccentricity_dist(prev_eccentricity, stddev);
 
         eccentricity = eccentricity_dist(gen);
@@ -111,12 +112,53 @@ static OrbitalParameters generate_random_orbital_params(
     float semi_minor_axis = semi_major_axis * sqr;
     float linear_e = sqrtf(semi_major_axis*semi_major_axis - semi_minor_axis*semi_minor_axis);
 
+    std::normal_distribution<float> inclination_dist(0.0f, 1.0f);
+    float inclination = std::clamp(inclination_dist(gen), -15.0f, +15.0f);
+
+    float rad_inclination = radians(inclination);
+    // Matrix plane_rot_mat = MatrixRotateZ(radians(inclination));
+
+    // Vector3 plane_normal = Vector3Normalize(Vector3Transform({ 0, 1, 0 }, plane_rot_mat));
+    // Vector3 plane_xt = Vector3Normalize(Vector3Transform({ 1, 0, 0 }, plane_rot_mat));
+    // Vector3 plane_zt = Vector3Normalize(Vector3Transform({ 0, 0, 1 }, plane_rot_mat));
+
+    // // This transition matrix may look wrong at first but raylib uses column major order
+    // // so we are actually storing them within the columns.
+    // Matrix transition_mat{};
+    // transition_mat.m0 = plane_xt.x;
+    // transition_mat.m4 = plane_xt.y;
+    // transition_mat.m8 = plane_xt.z;
+
+    // transition_mat.m1 = plane_normal.x;
+    // transition_mat.m5 = plane_normal.y;
+    // transition_mat.m9 = plane_normal.z;
+
+    // transition_mat.m2  = plane_zt.x;
+    // transition_mat.m6  = plane_zt.y;
+    // transition_mat.m10 = plane_zt.z;
+
+    // transition_mat.m15 = 1;
+
+    // Quaternion transition = QuaternionFromMatrix(transition_mat);
+    // Quaternion inv_transition = QuaternionInvert(transition);
+
+    // TODO (maddie): while this simplifies the code when the argument of periapsis is applied
+    // we will likely need to combine the quaternions to get the rotation we want.
+    Quaternion transition = QuaternionFromAxisAngle({ 0, 0, -1 }, rad_inclination);
+    Quaternion inv_transition = QuaternionInvert(transition);
+
+    Vector3 plane_normal = Vector3Normalize(Vector3RotateByQuaternion({ 0, 1, 0 }, inv_transition));
+
     return OrbitalParameters{
         .semi_major_axis = semi_major_axis,
         .semi_minor_axis = semi_minor_axis,
         .eccentricity = eccentricity,
         .linear_eccentricity = linear_e,
-        .true_anomaly = 0
+        .inclination = inclination,
+        .plane_normal = plane_normal,
+        .transition = transition,
+        .inv_transition = inv_transition,
+        .true_anomaly = 0,
     };
 }
 
@@ -142,7 +184,7 @@ Planet Planet::generate_random_planet(
 
     // 4.0f rough central star size. Use sqrt so the planets do not become
     // very large just because the star does.
-    float max_radius = 2.4f/4.0f * std::sqrtf(star.radius);
+    float max_radius = 2.8f/4.0f * std::sqrtf(star.radius);
     float min_radius = 1.6f/4.0f * std::sqrtf(star.radius);
     float mean_radius = (max_radius + min_radius) * 0.5f;
 
@@ -196,11 +238,25 @@ void Planet::update(bool orbit_ring_selected) {
 
 Vector3 Planet::get_position(Vector3 star_position) const {
 
+    // Coordinates within the plane of the orbit.
     float x = m_orbital_params.semi_major_axis * cos(m_orbital_params.true_anomaly);
     float z = m_orbital_params.semi_minor_axis * sin(m_orbital_params.true_anomaly);
+    float y = 0;
 
-    Vector3 offset = Vector3{ x + m_orbital_params.linear_eccentricity, 0, z };
+    // Convert to world coordinates.
+    Vector3 offset = Vector3RotateByQuaternion({ x, y, z }, m_orbital_params.inv_transition);
+
+    // Vector3 offset = Vector3Transform({ x, y, z }, m_orbital_params.inv_transition);
+    // Add additional offset in world units since the orbit is moved to have its foci
+    // aligned with the star.
+    offset.x += m_orbital_params.linear_eccentricity;
+    offset.y += m_orbital_params.linear_eccentricity * tan(radians(m_orbital_params.inclination));
     return star_position + offset;
+}
+
+Vector3 Planet::get_orbit_focus(Vector3 star_position) const {
+    float focus_y = m_orbital_params.linear_eccentricity * tan(radians(m_orbital_params.inclination));
+    return star_position + Vector3{ m_orbital_params.linear_eccentricity, focus_y, 0 };
 }
 
 void Planet::move_from(Planet&& other) noexcept {

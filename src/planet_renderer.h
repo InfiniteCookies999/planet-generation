@@ -24,15 +24,20 @@ public:
         bool planet_focused
     ) const;
 
+    ~PlanetRenderer();
+
 private:
     const Shader m_shader;
     const Shader m_orbit_shader;
+
+    // Only mutating the model matrix so letting this be mutable.
+    mutable Model m_orbit_model;
 
     // planet shader uniform locations.
     int m_direction_to_star_uniform_loc;
 
     // orbital shader uniforms locations.
-    int m_center_uniform_loc;
+    // int m_center_uniform_loc;
     int m_thickness_uniform_loc;
     int m_semi_major_axis_uniform_loc;
     int m_semi_minor_axis_uniform_loc;

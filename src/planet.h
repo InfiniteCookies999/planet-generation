@@ -12,6 +12,20 @@ struct OrbitalParameters {
     float eccentricity;
     float linear_eccentricity;
 
+    // As expressed in degrees.
+    float inclination;
+
+    // The normal of the orbital plane.
+    Vector3 plane_normal;
+
+    // Rotation from world coordinates to orbital plane coordinates
+    // represented by a quaternion.
+    Quaternion transition;
+
+    // Inverse rotation from orbital plane coordinates to world coordinates
+    // represented by a quaternion.
+    Quaternion inv_transition;
+
     float true_anomaly;
 };
 
@@ -46,6 +60,8 @@ public:
     void update(bool orbit_ring_selected);
 
     Vector3 get_position(Vector3 star_position) const;
+
+    Vector3 get_orbit_focus(Vector3 star_position) const;
 
     void set_true_anomaly(float true_anomaly) {
         m_orbital_params.true_anomaly = true_anomaly;
