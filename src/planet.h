@@ -31,12 +31,6 @@ struct OrbitalParameters {
     Quaternion inv_transition;
 
     float true_anomaly;
-
-    Vector3 extent_point;
-    Vector3 projected_extent_point;
-    Vector3 projected_plane_xt;
-    Vector3 projected_plane_zt;
-    Vector3 outer_extent_point;
 };
 
 class Planet {
@@ -44,16 +38,18 @@ public:
 
     Planet(
         Shader planet_shader,
+        const Star* star,
         const OrbitalParameters& orbital_params,
         float max_lod_radius
     );
 
     /// @param prev_planet The last planet generated that is closer to the
     ///                    star the planets orbit than this next one.
+    /// @param star The star the planet orbits around.
     ///
     static Planet generate_random_planet(
         Shader planet_shader,
-        const Star& star,
+        const Star* star,
         const Planet* prev_planet,
         std::mt19937& gen
     );
@@ -68,15 +64,15 @@ public:
 
     void update(bool orbit_ring_selected);
 
-    Vector3 get_position(Vector3 star_position) const;
+    Vector3 get_position() const;
 
-    Vector3 get_orbit_center(Vector3 star_position) const;
+    Vector3 get_orbit_center() const;
 
-    Vector3 get_orbit_focus(Vector3 star_position) const;
+    Vector3 get_orbit_focus() const;
 
-    Vector3 get_orbit_periapsis(Vector3 star_position) const;
+    Vector3 get_orbit_periapsis() const;
 
-    Vector3 get_ascending_node(Vector3 star_position) const;
+    Vector3 get_ascending_node() const;
 
     void set_true_anomaly(float true_anomaly) {
         m_orbital_params.true_anomaly = true_anomaly;
@@ -101,6 +97,8 @@ public:
     ~Planet();
 
 private:
+    const Star* m_star;
+
     OrbitalParameters m_orbital_params;
     float m_max_lod_radius;
 

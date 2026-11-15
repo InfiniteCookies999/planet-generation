@@ -21,8 +21,7 @@ public:
         const ControlledCamera& camera,
         const Planet& planet,
         Vector3 star_position,
-        bool planet_focused,
-        Color plane_color
+        bool planet_focused
     ) const;
 
     ~PlanetRenderer();
@@ -46,17 +45,13 @@ private:
     int m_znear_uniform_loc;
     int m_zfar_uniform_loc;
     int m_orbit_ring_selected_t_uniform_loc;
-    int m_periapsis_uniform_loc;
-    int m_ascending_node_uniform_loc;
-    int m_plane_color_uniform_loc;
 
 
     void render_orbit(
         const ControlledCamera& camera,
         const Planet& planet,
         Vector3 star_position,
-        bool planet_focused,
-        Color plane_color
+        bool planet_focused
     ) const;
 
 };

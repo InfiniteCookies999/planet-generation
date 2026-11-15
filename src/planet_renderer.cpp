@@ -2,7 +2,6 @@
 
 #include <assert.h>
 #include <cmath>
-#include <iostream>
 #include <raylib.h>
 #include <rlgl.h>
 #include <raymath.h>
@@ -21,9 +20,6 @@ PlanetRenderer::PlanetRenderer(Shader planet_shader, Shader orbit_shader)
     m_znear_uniform_loc = GetShaderLocation(m_orbit_shader, "u_znear");
     m_zfar_uniform_loc = GetShaderLocation(m_orbit_shader, "u_zfar");
     m_orbit_ring_selected_t_uniform_loc = GetShaderLocation(m_orbit_shader, "u_selected_t");
-    m_periapsis_uniform_loc = GetShaderLocation(m_orbit_shader, "u_periapsis");
-    m_ascending_node_uniform_loc = GetShaderLocation(m_orbit_shader, "u_ascending_node");
-    m_plane_color_uniform_loc = GetShaderLocation(m_orbit_shader, "u_plane_color");
 
     // Pre-scale the model to be way more than the maximum size ever realistically would be.
     // We want to use a model here because we want to take vertexPosition as passed into the
@@ -43,17 +39,15 @@ void PlanetRenderer::render(
     const ControlledCamera& camera,
     const Planet& planet,
     Vector3 star_position,
-    bool planet_focused,
-    Color plane_color
+    bool planet_focused
 ) const {
 
-    render_orbit(camera, planet, star_position, planet_focused, plane_color);
+    render_orbit(camera, planet, star_position, planet_focused);
 
     // TODO (maddie): Have a planet rotate on its own axis.
 
     // render planet.
-    Vector3 planet_position = planet.get_position(star_position);
-
+    Vector3 planet_position = planet.get_position();
 
     Vector3 direction_to_star = Vector3Normalize(star_position - planet_position);
     SetShaderValue(m_shader, m_direction_to_star_uniform_loc, &direction_to_star, SHADER_UNIFORM_VEC3);
@@ -66,8 +60,7 @@ void PlanetRenderer::render_orbit(
     const ControlledCamera& camera,
     const Planet& planet,
     Vector3 star_position,
-    bool planet_focused,
-    Color plane_color
+    bool planet_focused
 ) const {
 
     // TODO (maddie): adjust by argument of periapsis
@@ -96,18 +89,7 @@ void PlanetRenderer::render_orbit(
         orbit_ring_selected_t = 1.0f;
     }
 
-    Vector3 periapsis = planet.get_orbit_periapsis(star_position);
-    Vector3 ascending_node = planet.get_ascending_node(star_position);
-
-
-    float plane_color_buffer[] = {
-        plane_color.r / 255.0f,
-        plane_color.g / 255.0f,
-        plane_color.b / 255.0f,
-    };
-
     const float thickness = 0.8f;
-    // SetShaderValue(m_orbit_shader, m_center_uniform_loc, &focus, SHADER_UNIFORM_VEC3);
     SetShaderValue(m_orbit_shader, m_thickness_uniform_loc, &thickness, SHADER_UNIFORM_FLOAT);
     SetShaderValue(m_orbit_shader, m_semi_major_axis_uniform_loc, &semi_major_axis, SHADER_UNIFORM_FLOAT);
     SetShaderValue(m_orbit_shader, m_semi_minor_axis_uniform_loc, &semi_minor_axis, SHADER_UNIFORM_FLOAT);
@@ -115,29 +97,6 @@ void PlanetRenderer::render_orbit(
     SetShaderValue(m_orbit_shader, m_znear_uniform_loc, &znear, SHADER_UNIFORM_FLOAT);
     SetShaderValue(m_orbit_shader, m_zfar_uniform_loc, &zfar, SHADER_UNIFORM_FLOAT);
     SetShaderValue(m_orbit_shader, m_orbit_ring_selected_t_uniform_loc, &orbit_ring_selected_t, SHADER_UNIFORM_FLOAT);
-    SetShaderValue(m_orbit_shader, m_periapsis_uniform_loc, &periapsis, SHADER_UNIFORM_VEC3);
-    SetShaderValue(m_orbit_shader, m_ascending_node_uniform_loc, &ascending_node, SHADER_UNIFORM_VEC3);
-    SetShaderValue(m_orbit_shader, m_plane_color_uniform_loc, plane_color_buffer, SHADER_UNIFORM_VEC3);
-
-    // TODO (maddie): this is not using the transition quaternion to rotate the plane.
-
-    // std::cout << "focus: " << focus.x << "," << focus.y << "," << focus.z << "\n";
-
-    // rlPushMatrix();
-    // Matrix m = QuaternionToMatrix(orbital_params.inv_transition);
-    // Matrix m1 = MatrixTranslate(focus.x, focus.y, focus.z);
-    // // m1 = MatrixMultiply(m1, m);
-    // float16 m_values = MatrixToFloatV(m1);
-    // rlMultMatrixf(&m_values.v[0]);
-    // // rlTranslatef(focus.x, focus.y, focus.z);
-
-
-    // DrawPlane({0,0,0}, {300.0f,300.0f}, WHITE);
-    // rlPopMatrix();
-
-    // Vector3 rot_axis = { 0, 0, 1 };
-    // Vector3 scale = { 1, 1, 1 };
-    // DrawModelEx(m_orbit_model, focus, rot_axis, orbital_params.inclination, scale, WHITE);
 
     // We want to construct a matrix which first translates to the orbit's foci to
     // the where the star would be in the orbital plane. However, this still takes

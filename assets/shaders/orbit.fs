@@ -13,10 +13,6 @@ uniform float u_znear;
 uniform float u_zfar;
 uniform float u_selected_t;
 
-uniform vec3 u_periapsis;
-uniform vec3 u_ascending_node;
-uniform vec3 u_plane_color;
-
 float linear_depth(float depth) {
     float z = depth * 2.0 - 1.0; // Convert back to NDC  (0 to 1)
     return (2.0 * u_znear * u_zfar) / (u_zfar + u_znear - z * (u_zfar - u_znear));
@@ -52,18 +48,4 @@ void main() {
 
     finalColor = vec4(color, max(0.0, t - 0.3));
 
-    if (distance(fragWorldPosition, u_periapsis) < 1.0) {
-        finalColor = vec4(0.0, 1.0, 0.0, 1.0);
-    }
-    if (distance(fragWorldPosition, u_ascending_node) < 1.0) {
-        finalColor = vec4(1.0, 0.0, 0.0, 1.0);
-    }
-
-    // if (t - 0.3 <= 0.0) {
-    //     if ((fragPosition.z < u_semi_minor_axis && fragPosition.z > -u_semi_minor_axis) &&
-    //         (fragPosition.x < u_semi_major_axis && fragPosition.x > -u_semi_major_axis)
-    //     ) {
-    //         finalColor = vec4(u_plane_color, 0.5);
-    //     }
-    // }
 }
