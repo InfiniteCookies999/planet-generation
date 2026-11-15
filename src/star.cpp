@@ -37,7 +37,7 @@ Star create_randomized_star(std::mt19937& gen) {
     float scale_factor = get_random_scale_factor(color, gen);
 
     return Star{
-        .position = { 0, 0, 0 },
+        .position = { 0, 0, 0 }, //{ 20, 10, 20 },
         .radius = 4.5f * scale_factor,
         .color = color
     };

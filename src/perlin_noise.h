@@ -5,15 +5,13 @@
 class PerlinNoise2D {
 public:
 
-    /*
-     * Initializes with a randomized hash table using `gen` to produce
-     * different results per instance.
-     */
+    /// Initializes with a randomized hash table using `gen` to produce
+    /// different results per instance.
+    ///
     PerlinNoise2D(std::mt19937& gen);
 
-    /*
-     * @return value in the range (-1, 1).
-     */
+    /// @return value in the range (-1, 1).
+    ///
     float sample(float x, float y);
 
     static std::vector<int> get_random_gradiant_hashes(std::mt19937& gen);
@@ -37,15 +35,13 @@ private:
 class PerlinNoise3D {
 public:
 
-    /*
-     * Initializes with a randomized permutation table using `gen` to produce
-     * different results per instance.
-     */
+    /// Initializes with a randomized permutation table using `gen` to produce
+    /// different results per instance.
+    ///
     PerlinNoise3D(std::mt19937& gen);
 
-    /*
-     * @return value in the range (-1, 1).
-     */
+    /// @return value in the range (-1, 1).
+    ///
     float sample(float x, float y, float z);
 
 private:

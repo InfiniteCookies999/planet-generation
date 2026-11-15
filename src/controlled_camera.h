@@ -15,18 +15,17 @@ struct CameraParams {
 class ControlledCamera {
 public:
 
-    /**
-     * @param target the point to look at.
-     */
+    /// @param target the point to look at.
+    ///
     ControlledCamera(Vector3 target, const CameraParams& params);
 
     void update(float dt);
 
-    /**
-     * @param target the point to look at.
-     * @param is_new_target even if the point to look at differs the user
-     *                      may be looking at a different object than before.
-     */
+
+    /// @param target the point to look at.
+    /// @param is_new_target even if the point to look at differs the user
+    ///                      may be looking at a different object than before.
+    ///
     void set_target(Vector3 target, bool is_new_target);
 
     Camera get_raylib_camera() const {

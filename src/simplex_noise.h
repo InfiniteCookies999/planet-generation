@@ -5,15 +5,13 @@
 class SimplexNoise2D {
 public:
 
-    /*
-     * Initializes with a randomized hash table using `gen` to produce
-     * different results per instance.
-     */
+    /// Initializes with a randomized hash table using `gen` to produce
+    /// different results per instance.
+    ///
     SimplexNoise2D(std::mt19937& gen);
 
-    /*
-     * @return value in the range (-1, 1).
-     */
+    /// @return value in the range (-1, 1).
+    ///
     float sample(float x, float y);
 
 private:

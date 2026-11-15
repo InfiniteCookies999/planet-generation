@@ -9,6 +9,8 @@
 #include "planet.h"
 #include "text_3d.h"
 
+#include <cmath>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <random>
@@ -55,7 +57,9 @@ static void generate_random_planets(
     Shader planet_shader
 );
 
+
 int main() {
+
 
     InitWindow(1024, 700, "planet generation");
 
@@ -76,12 +80,12 @@ int main() {
             .yaw = 0.0f,
             .pitch = 0.4f,
             .min_zoom = 5.0f,
-            .max_zoom = +600.0f
+            .max_zoom = +2000.0f
         }
     );
     //RL_CULL_DISTANCE_FAR
     //RL_CULL_DISTANCE_FAR
-    // rlSetClipPlanes(0.01f, 2000.0f);
+    rlSetClipPlanes(0.01f, 3000.0f);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -199,27 +203,89 @@ int main() {
             generate_random_planets(star, planets, gen, planet_shader);
         }
 
-        // DrawGrid(50.0f, 1.0f);
+        const float GRID_SIZE = 50.0f;
+        // DrawGrid(GRID_SIZE, 1.0f);
         // { // Render coordinates text.
         //     BeginShaderMode(discard_alpha_shader);
 
-        //     draw_text_3d(font_x64, "+X", Vector3{ +24, 0, 0 }, 0.5f,  0.5f, 0.0f, true, BLUE);
-        //     draw_text_3d(font_x64, "-X", Vector3{ -25, 0, 0 }, 0.5f,  0.5f, 0.0f, true, BLUE);
+        //     draw_text_3d(font_x64, "+X", Vector3{ +GRID_SIZE/2 - 1, 0, 0 }, 0.5f,  0.5f, 0.0f, true, BLUE);
+        //     draw_text_3d(font_x64, "-X", Vector3{ -GRID_SIZE/2, 0, 0 }, 0.5f,  0.5f, 0.0f, true, BLUE);
 
-        //     draw_text_3d(font_x64, "+Z", Vector3{ 0, 0, +24 }, 0.5f,  0.5f, 0.0f, true, BLUE);
-        //     draw_text_3d(font_x64, "-Z", Vector3{ 0, 0, -25 }, 0.5f,  0.5f, 0.0f, true, BLUE);
+        //     draw_text_3d(font_x64, "+Z", Vector3{ 0, 0, +GRID_SIZE/2 - 1 }, 0.5f,  0.5f, 0.0f, true, BLUE);
+        //     draw_text_3d(font_x64, "-Z", Vector3{ 0, 0, -GRID_SIZE/2 }, 0.5f,  0.5f, 0.0f, true, BLUE);
 
         //     EndShaderMode();
         // }
 
+
+        Vector3 focus = planets[0].get_orbit_focus(star.position);
+
+        Vector3 normal = planets[0].get_orbital_params().plane_normal;
+        Vector3 plane_xt = planets[0].get_orbital_params().plane_xt;
+        Vector3 plane_zt = planets[0].get_orbital_params().plane_zt;
+
+
+        Vector3 mouse_point{};
+        {
+            const Planet& planet = planets[0];
+            Ray ray = GetScreenToWorldRay(GetMousePosition(), camera.get_raylib_camera());
+            Vector3 focus = planet.get_orbit_focus(star.position);
+
+            Vector3 p0 = focus;
+            Vector3 l0 = ray.position;
+            Vector3 plane_normal = planet.get_orbital_params().plane_normal;
+            float dem = Vector3DotProduct(ray.direction, plane_normal);
+            if (!FloatEquals(dem, 0.0f)) {
+                float d = Vector3DotProduct(p0 - l0, plane_normal) / dem;
+                mouse_point = l0 + ray.direction * d;
+            }
+        }
+
+
+
+
+        int cc = 0;
         for (const Planet& planet : planets) {
             planet_renderer.render(
                 camera,
                 planet,
                 star.position,
-                focused_planet == &planet
+                focused_planet == &planet,
+                cc == 0 ? WHITE : PURPLE
             );
+            ++cc;
         }
+
+        // Vector3 extent_point = planets[1].get_orbital_params().extent_point;
+        // DrawCircle3D(extent_point, 3.0f, {0, 1, 0}, 0.0f, GREEN);
+
+        // Vector3 proj_extent_point = planets[1].get_orbital_params().projected_extent_point;
+        // DrawCircle3D(proj_extent_point, 3.0f, {0, 1, 0}, 0.0f, RED);
+
+        // Vector3 outer_extent_point = planets[1].get_orbital_params().outer_extent_point;
+        // DrawCircle3D(outer_extent_point, 3.0f, {0, 1, 0}, 0.0f, YELLOW);
+
+        // DrawLine3D(normal * -20, normal * 20, RED);
+        // DrawLine3D(plane_xt * -20, plane_xt * 20, RED);proj_extent_point
+        // DrawLine3D(plane_zt * -20, plane_zt * 20, RED);
+
+
+        Vector3 center = planets[1].get_orbit_center(star.position);
+        Vector3 proj_plane_xt = planets[1].get_orbital_params().projected_plane_xt;
+        Vector3 proj_plane_zt = planets[1].get_orbital_params().projected_plane_zt;
+        DrawLine3D(center, center + proj_plane_xt * planets[1].get_orbital_params().semi_major_axis, YELLOW);
+        DrawLine3D(center, center + proj_plane_zt * planets[1].get_orbital_params().semi_minor_axis, YELLOW);
+
+
+        // Vector3 start = star.position;
+        // float d = planets[1].get_orbital_params().distance_thing;
+        // //planets[1].get_orbital_params().semi_major_axis
+        // Vector3 end = star.position - (plane_xt * d);
+        // DrawLine3D(start, end, YELLOW);
+
+
+        // Vector3 center = planets[0].get_orbit_center(star.position);
+        // DrawCircle3D(center, 3.0f, {0, 1, 0}, 0.0f, GREEN);
 
         star_renderer.render(star, camera, tick);
 
@@ -279,10 +345,10 @@ static MousePick mouse_pick_planet_or_star(
         // Intersection code with orbit ring.
         auto& orbital_params = planet.get_orbital_params();
 
-        // Use the focus point as the point on the plane.
-        Vector3 focus = planet.get_orbit_focus(star.position);
+        // Use the center point as the point on the plane.
+        Vector3 center = planet.get_orbit_center(star.position);
 
-        Vector3 p0 = focus;
+        Vector3 p0 = center;
         Vector3 l0 = ray.position;
         Vector3 plane_normal = orbital_params.plane_normal;
         float dem = Vector3DotProduct(ray.direction, plane_normal);
@@ -300,10 +366,11 @@ static MousePick mouse_pick_planet_or_star(
         float ratio = orbital_params.semi_major_axis / orbital_params.semi_minor_axis;
 
         // Apply transition to do the math within the coordinates of the orbital plane.
-        Vector3 t_focus = Vector3RotateByQuaternion(focus, orbital_params.transition);
+        Vector3 t_center = Vector3RotateByQuaternion(center, orbital_params.transition);
         Vector3 t_hit_point = Vector3RotateByQuaternion(hit_point, orbital_params.transition);
 
-        Vector2 offset = Vector2{ t_hit_point.x, t_hit_point.z } - Vector2{ t_focus.x, t_focus.z };
+
+        Vector2 offset = Vector2{ t_hit_point.x, t_hit_point.z } - Vector2{ t_center.x, t_center.z };
         offset = Vector2{ offset.x, offset.y * ratio };
         float dist = Vector2Length(offset);
 
@@ -312,12 +379,16 @@ static MousePick mouse_pick_planet_or_star(
         );
         float distance_from_camera = Vector3Distance(hit_point, camera.get_position());
         float zfar = rlGetCullDistanceFar();
-        float distance_adj = distance_from_camera / zfar;
+        float linear_depth = distance_from_camera / zfar;
 
 
         float local_dist = std::abs(dist - orbital_params.semi_major_axis);
-        // TODO (maddie): 0.8f value copied from renderer code.
-        float thickness = 0.8f + 3.0f + (distance_adj * 1.5f) * (1.0f - planar_forward_dot);
+
+        float depth_impact = std::max(0.0f, 1.0f - planar_forward_dot);
+        depth_impact = pow(depth_impact, 0.25) * 0.7;
+
+        // Note: basically just number tuning.
+        float thickness = 3.0f + 3.0f * powf(2.4f, 1.0f + 2.0f * std::min(1.0f, linear_depth)) * depth_impact;
         if (local_dist < thickness) {
             pick.type = MousePick::Type::PLANET_ORBIT_RING;
             pick.planet = &planet;
@@ -368,8 +439,6 @@ static void generate_random_planets(
     int num_planets = static_cast<int>(num_planets_dist(gen));
     num_planets = std::clamp(num_planets, 3, 7);
 
-    // std::uniform_int_distribution<int> num_planets_dist(2, 8);
-    // int num_planets = num_planets_dist(gen);
     for (int i = 0; i < num_planets; i++) {
         Planet* prev_planet = i != 0
             ? &planets.back()

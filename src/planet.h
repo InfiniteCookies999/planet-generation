@@ -14,9 +14,13 @@ struct OrbitalParameters {
 
     // As expressed in degrees.
     float inclination;
+    float long_of_ascending_node;
+    float arg_of_periapsis;
 
     // The normal of the orbital plane.
     Vector3 plane_normal;
+    Vector3 plane_xt;
+    Vector3 plane_zt;
 
     // Rotation from world coordinates to orbital plane coordinates
     // represented by a quaternion.
@@ -27,6 +31,12 @@ struct OrbitalParameters {
     Quaternion inv_transition;
 
     float true_anomaly;
+
+    Vector3 extent_point;
+    Vector3 projected_extent_point;
+    Vector3 projected_plane_xt;
+    Vector3 projected_plane_zt;
+    Vector3 outer_extent_point;
 };
 
 class Planet {
@@ -38,10 +48,9 @@ public:
         float max_lod_radius
     );
 
-    /**
-     * @param prev_planet The last planet generated that is closer to the
-     *                    star the planets orbit than this next one.
-     */
+    /// @param prev_planet The last planet generated that is closer to the
+    ///                    star the planets orbit than this next one.
+    ///
     static Planet generate_random_planet(
         Shader planet_shader,
         const Star& star,
@@ -61,7 +70,13 @@ public:
 
     Vector3 get_position(Vector3 star_position) const;
 
+    Vector3 get_orbit_center(Vector3 star_position) const;
+
     Vector3 get_orbit_focus(Vector3 star_position) const;
+
+    Vector3 get_orbit_periapsis(Vector3 star_position) const;
+
+    Vector3 get_ascending_node(Vector3 star_position) const;
 
     void set_true_anomaly(float true_anomaly) {
         m_orbital_params.true_anomaly = true_anomaly;
