@@ -30,6 +30,7 @@ struct OrbitalParameters {
     // represented by a quaternion.
     Quaternion inv_transition;
 
+    float mean_anomaly;
     float true_anomaly;
 };
 
@@ -114,4 +115,7 @@ private:
     int m_orbit_ring_selected_ticks = 0;
 
     void move_from(Planet&& other) noexcept;
+
+    static float get_eccentric_anomaly(float mean_anomaly, float eccentricity);
+
 };

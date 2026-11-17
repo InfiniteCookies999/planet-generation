@@ -130,6 +130,7 @@ static OrbitalParameters generate_random_orbital_params(
         .plane_zt = plane_zt,
         .transition = transition,
         .inv_transition = inv_transition,
+        .mean_anomaly = 0,
         .true_anomaly = 0,
     };
 }
@@ -200,23 +201,23 @@ void Planet::update(bool orbit_ring_selected) {
         }
     }
 
-    // TODO (maddie):
-    // Proper orbit path so it doesnt have weird slowdown at the ends.
-    // Since there is no intent to generate a highly accurate simulation
-    // something that approximates it would be good.
-    //
-    // Probably want to follow kepler orbit:
-    // https://en.wikipedia.org/wiki/Kepler_orbit
-    m_orbital_params.true_anomaly += 0.0005;
+    m_orbital_params.mean_anomaly += 0.001f;
+    const float ecc = m_orbital_params.eccentricity;
+    const float ecc_anomaly = get_eccentric_anomaly(m_orbital_params.mean_anomaly, ecc);
+
+    // From: https://en.wikipedia.org/wiki/True_anomaly#From_the_eccentric_anomaly
+    // Specifically "a form of this equation was derived by R. Broucke and P. Cefola..."
+    const float beta = ecc / (1.0f + sqrt(1.0f - ecc*ecc));
+    const float true_anomaly = ecc_anomaly + 2.0f * atan((beta * sin(ecc_anomaly)) / (1.0f - beta * cos(ecc_anomaly)));
+
+    m_orbital_params.true_anomaly = true_anomaly;
 }
 
 Vector3 Planet::get_position() const {
-
     // Coordinates within the plane of the orbit.
-    // We are adding PI here since a true anomaly of 0 degrees has the planet at the
-    // periabsis of the orbit.
-    float x = m_orbital_params.semi_major_axis * sin(m_orbital_params.true_anomaly + PI);
-    float z = m_orbital_params.semi_minor_axis * cos(m_orbital_params.true_anomaly + PI);
+    // Negate true anomaly to get it to orbit counter-clockwise
+    float x = m_orbital_params.semi_major_axis * cos(-m_orbital_params.true_anomaly);
+    float z = m_orbital_params.semi_minor_axis * sin(-m_orbital_params.true_anomaly);
 
     // Transform by the orbit offset relative to the star.
     Matrix rotation = QuaternionToMatrix(m_orbital_params.inv_transition);
@@ -308,6 +309,37 @@ void Planet::move_from(Planet&& other) noexcept {
     m_max_lod_radius = other.m_max_lod_radius;
     m_model = std::exchange(other.m_model, Model{});
     m_star = other.m_star;
+}
+
+
+float Planet::get_eccentric_anomaly(float mean_anomaly, float eccentricity) {
+    // Solves for eccentric anomaly using Newton's method.
+    //
+    // Mean anomaly and eccentric anomaly are related by:
+    // mean = E - e*sin(E)
+    // Where E is the eccentric anomaly being solved for.
+    //
+    // Then Newton's method is applied to:
+    // f(E) = E - e*sin(E) - mean
+
+    float mean = mean_anomaly;
+    float e = eccentricity;
+    float x0 = mean;
+
+    const float EPS = 1e-6;
+
+    float xn = x0;
+    for (int step = 0; step < 100; step++) {
+        xn = xn - (xn - e * sin(xn) - mean) / (1.0f - e * cos(xn));
+        if (step >= 15) {
+            float sol = xn - e * sin(xn);
+            if (std::abs(sol - mean_anomaly) <= EPS) {
+                break;
+            }
+        }
+    }
+
+    return xn;
 }
 
 Planet::~Planet() {

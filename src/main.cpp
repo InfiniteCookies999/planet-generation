@@ -54,9 +54,7 @@ static void generate_random_planets(
     Shader planet_shader
 );
 
-
 int main() {
-
 
     InitWindow(1024, 700, "planet generation");
 
